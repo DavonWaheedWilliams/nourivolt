@@ -1,0 +1,13 @@
+Dashboard ring fill correction
+
+The four circular dashboard metrics now use direct conic-gradient progress fills.
+The colored arc equals the completed percentage and the remaining arc stays light gray.
+Zero values display a fully gray ring.
+
+Examples:
+- 100 of 1,800 calories = 5.6% colored
+- 25 of 225 grams protein = 11.1% colored
+- 0 water = gray ring
+- Readiness follows the 0-100 score
+
+All existing app functionality and saved-data compatibility remain unchanged.

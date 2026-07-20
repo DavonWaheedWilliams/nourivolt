@@ -1,0 +1,8 @@
+streamlit>=1.41,<2
+SQLAlchemy>=2.0,<3
+psycopg2-binary>=2.9,<3
+bcrypt>=4.2,<5
+pandas>=2.2,<3
+requests>=2.32,<3
+Pillow>=10.4,<13
+zxing-cpp>=2.2,<4

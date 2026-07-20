@@ -1,0 +1,12 @@
+NouriVolt unit display update
+
+This update preserves all existing app features and saved data.
+
+Changes:
+- Height entry uses inches.
+- Water logging and water targets use U.S. fluid ounces.
+- Workout dates display as MM/DD/YYYY.
+- Exports include both U.S. display units and original metric storage values.
+
+Important:
+Keep your existing data/nourivolt.db file when replacing the application files.

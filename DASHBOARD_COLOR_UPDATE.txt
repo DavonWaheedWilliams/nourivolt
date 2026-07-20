@@ -1,0 +1,14 @@
+NouriVolt dashboard color-progress update
+
+The app's existing functionality remains unchanged.
+
+Dashboard visual changes:
+- Calories ring fills purple as calories are logged.
+- Protein ring fills teal as protein is logged.
+- Water ring fills blue as water is logged.
+- Readiness ring fills according to the score and changes color by readiness range.
+- Carbohydrates bar fills orange to yellow as carbohydrates are logged.
+- Fat bar fills pink to violet as fat is logged.
+- Progress fills animate whenever the dashboard refreshes.
+
+Keep your existing data/nourivolt.db file when replacing app files.

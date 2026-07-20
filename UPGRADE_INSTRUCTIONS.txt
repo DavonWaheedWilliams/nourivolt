@@ -1,0 +1,18 @@
+NOURIVOLT FUTURE VISION UPGRADE
+
+KEEP YOUR EXISTING DATA
+
+Your accounts and logs are stored in:
+    data\nourivolt.db
+
+Before upgrading:
+1. Stop Streamlit.
+2. Copy data\nourivolt.db to a safe backup location.
+3. Replace app.py, requirements.txt, README.md, and .streamlit\config.toml.
+4. Add vision_services.py.
+5. Put your original nourivolt.db back inside the data folder.
+6. Run: pip install -r requirements.txt
+7. Run: streamlit run app.py
+
+The app creates the new Smart Scan and Readiness tables automatically.
+Do not replace your existing database with an empty database.

@@ -1,0 +1,14 @@
+NouriVolt Colorful Theme Update
+
+This release changes the visual theme only. It preserves all existing functionality, accounts, saved data, calculations, camera food analysis, barcode lookup, workouts, goals, readiness tools, and exports.
+
+Visual changes include:
+- richer pastel page background
+- multicolor hero accents
+- color-tinted dashboard cards
+- metric-specific ring cards
+- colorful tabs and buttons
+- brighter forms, scan panels, status panels, and result cells
+- enhanced sidebar selection styling
+
+Keep your existing data/nourivolt.db file when replacing the app files.
