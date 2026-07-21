@@ -210,31 +210,13 @@ class DailyCheckIn(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
-def _read_streamlit_secret(name: str) -> str | None:
-    """Read a root-level Streamlit secret without requiring secrets.toml locally."""
-    try:
-        value = st.secrets.get(name)
-    except (FileNotFoundError, KeyError, AttributeError):
-        return None
-    if value is None:
-        return None
-    cleaned = str(value).strip()
-    return cleaned or None
-
-
 def get_database_url() -> str:
-    """Use durable PostgreSQL online and SQLite only for local development."""
-    database_url = (
-        os.getenv("DATABASE_URL")
-        or os.getenv("database_url")
-        or _read_streamlit_secret("DATABASE_URL")
-        or _read_streamlit_secret("database_url")
-    )
-    if database_url:
-        # Some providers still return the legacy postgres:// prefix.
-        if database_url.startswith("postgres://"):
-            database_url = "postgresql://" + database_url[len("postgres://") :]
-        return database_url
+    # Use an optional environment variable for online database hosting.
+    # Local use falls back to SQLite without reading st.secrets, so a
+    # missing secrets.toml path is never rendered in the app.
+    env_url = os.getenv("DATABASE_URL")
+    if env_url:
+        return str(env_url)
 
     data_dir = Path(__file__).parent / "data"
     data_dir.mkdir(exist_ok=True)
@@ -245,10 +227,6 @@ DATABASE_URL = get_database_url()
 ENGINE_KWARGS: dict[str, Any] = {"pool_pre_ping": True}
 if DATABASE_URL.startswith("sqlite"):
     ENGINE_KWARGS["connect_args"] = {"check_same_thread": False}
-else:
-    # Neon and similar serverless Postgres services can suspend idle computes.
-    # Recycle old connections and verify each connection before use.
-    ENGINE_KWARGS["pool_recycle"] = 300
 
 engine = create_engine(DATABASE_URL, **ENGINE_KWARGS)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
@@ -1236,14 +1214,14 @@ def render_auth() -> None:
                 "Sign in",
                 key="show_sign_in",
                 type="primary" if st.session_state.auth_mode == "Sign in" else "secondary",
-                use_container_width=True,
+                width="stretch",
             )
         with create_col:
             create_clicked = st.button(
                 "Create account",
                 key="show_create_account",
                 type="primary" if st.session_state.auth_mode == "Create account" else "secondary",
-                use_container_width=True,
+                width="stretch",
             )
 
         if sign_in_clicked and st.session_state.auth_mode != "Sign in":
@@ -1257,7 +1235,7 @@ def render_auth() -> None:
             with st.form("login_form"):
                 login = st.text_input("Username or email")
                 password = st.text_input("Password", type="password")
-                submitted = st.form_submit_button("Sign in", type="primary", use_container_width=True)
+                submitted = st.form_submit_button("Sign in", type="primary", width="stretch")
             if submitted:
                 user = authenticate(login, password)
                 if user:
@@ -1278,7 +1256,7 @@ def render_auth() -> None:
                     help="Use 8 or more characters with at least one letter and one number.",
                 )
                 confirm = st.text_input("Confirm password", type="password")
-                submitted = st.form_submit_button("Create account", type="primary", use_container_width=True)
+                submitted = st.form_submit_button("Create account", type="primary", width="stretch")
             if submitted:
                 if password != confirm:
                     st.error("The passwords do not match.")
@@ -1301,7 +1279,7 @@ def sidebar(user: User) -> None:
             st.session_state.page = chosen
             st.rerun()
         st.divider()
-        if st.button("Log out", use_container_width=True):
+        if st.button("Log out", width="stretch"):
             st.session_state.user_id = None
             st.session_state.username = None
             st.session_state.page = "Dashboard"
@@ -1427,7 +1405,7 @@ def render_dashboard(user: User) -> None:
         weight_rows = [m for m in reversed(latest_measurements) if m.weight_lb is not None]
         if weight_rows:
             df = pd.DataFrame({"Date": [m.measurement_date for m in weight_rows], "Weight (lb)": [m.weight_lb for m in weight_rows]}).set_index("Date")
-            st.line_chart(df, use_container_width=True)
+            st.line_chart(df, width="stretch")
         else:
             st.markdown('<div class="nv-empty">Add a body measurement to start your progress chart.</div>', unsafe_allow_html=True)
     with right:
@@ -1491,7 +1469,7 @@ def render_nutrition(user: User) -> None:
             carbs = c3.number_input("Carbs (g)", min_value=0.0, step=1.0)
             fat = c4.number_input("Fat (g)", min_value=0.0, step=1.0)
             notes = st.text_area("Notes", height=80)
-            submitted = st.form_submit_button("Save food", type="primary", use_container_width=True)
+            submitted = st.form_submit_button("Save food", type="primary", width="stretch")
         if submitted:
             if not food_name.strip():
                 st.error("Enter a food name.")
@@ -1504,7 +1482,7 @@ def render_nutrition(user: User) -> None:
     with add_water:
         with st.form("add_water_form", clear_on_submit=True):
             amount_oz = st.number_input("Amount (fl oz)", min_value=1.0, max_value=170.0, value=8.0, step=1.0)
-            submitted = st.form_submit_button("Add water", type="primary", use_container_width=True)
+            submitted = st.form_submit_button("Add water", type="primary", width="stretch")
         if submitted:
             with SessionLocal() as session:
                 session.add(WaterLog(user_id=user.id, log_date=selected_date, amount_ml=fl_oz_to_ml(amount_oz)))
@@ -1529,7 +1507,7 @@ def render_nutrition(user: User) -> None:
             for x in logs
         ])
         display_df = df.drop(columns=["ID"]).copy()
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        st.dataframe(display_df, width="stretch", hide_index=True)
         delete_id = st.selectbox("Remove a food entry", options=[None] + [x.id for x in logs], format_func=lambda value: "Select an entry" if value is None else next(f"{x.meal}: {x.food_name}" for x in logs if x.id == value))
         if st.button("Delete selected food", disabled=delete_id is None):
             with SessionLocal() as session:
@@ -1600,7 +1578,7 @@ def render_smart_scan(user: User) -> None:
                 st.caption(f"Status: {status}. Vision model: {model_name}")
 
             image_file = food_camera or food_upload
-            if st.button("Analyze meal photo", type="primary", use_container_width=True, key="analyze_food_photo"):
+            if st.button("Analyze meal photo", type="primary", width="stretch", key="analyze_food_photo"):
                 if image_file is None:
                     st.error("Take or upload a food photo first.")
                 elif not st.session_state.openai_api_key:
@@ -1652,7 +1630,7 @@ def render_smart_scan(user: User) -> None:
                     fat = c4.number_input("Fat (g)", min_value=0.0, value=_safe_float(result.get("fat_g")), step=1.0)
                     fiber = c5.number_input("Fiber (g)", min_value=0.0, value=_safe_float(result.get("fiber_g")), step=1.0)
                     notes = st.text_area("Notes", value="AI estimate reviewed by user")
-                    saved = st.form_submit_button("Save to food diary", type="primary", use_container_width=True)
+                    saved = st.form_submit_button("Save to food diary", type="primary", width="stretch")
                 if saved:
                     add_scanned_food(
                         user,
@@ -1687,7 +1665,7 @@ def render_smart_scan(user: User) -> None:
                 key="barcode_upload",
             )
             barcode_image = barcode_camera or barcode_upload
-            if st.button("Detect barcode", use_container_width=True, key="detect_barcode"):
+            if st.button("Detect barcode", width="stretch", key="detect_barcode"):
                 if barcode_image is None:
                     st.error("Take or upload a barcode image first.")
                 else:
@@ -1707,7 +1685,7 @@ def render_smart_scan(user: User) -> None:
                     unsafe_allow_html=True,
                 )
             manual_barcode = st.text_input("Barcode number", value=detected_code, key="manual_barcode_lookup")
-            if st.button("Look up nutrition", type="primary", use_container_width=True, key="lookup_barcode"):
+            if st.button("Look up nutrition", type="primary", width="stretch", key="lookup_barcode"):
                 try:
                     with st.spinner("Searching packaged-food nutrition..."):
                         st.session_state.barcode_product = cached_product_lookup(manual_barcode)
@@ -1792,7 +1770,7 @@ def render_smart_scan(user: User) -> None:
                         "Notes",
                         value=f"Barcode {product.get('barcode', '')}. Nutri-Score {grade}. NOVA {nova}.",
                     )
-                    saved = st.form_submit_button("Save to food diary", type="primary", use_container_width=True)
+                    saved = st.form_submit_button("Save to food diary", type="primary", width="stretch")
                 if saved:
                     add_scanned_food(
                         user,
@@ -1887,7 +1865,7 @@ def render_smart_scan(user: User) -> None:
                     for item in scans
                 ]
             )
-            st.dataframe(history_df, use_container_width=True, hide_index=True)
+            st.dataframe(history_df, width="stretch", hide_index=True)
         else:
             st.markdown('<div class="nv-empty">Food-photo and barcode scans will appear here after you save them.</div>', unsafe_allow_html=True)
 
@@ -1931,7 +1909,7 @@ def render_readiness(user: User) -> None:
         soreness = c3.slider("Soreness", 1, 10, int(current.soreness if current else 5))
         mood = c4.slider("Mood", 1, 10, int(current.mood if current else 5))
         notes = st.text_area("Notes", value=current.notes if current else "")
-        saved = st.form_submit_button("Save daily signal", type="primary", use_container_width=True)
+        saved = st.form_submit_button("Save daily signal", type="primary", width="stretch")
     if saved:
         with SessionLocal() as session:
             owned = session.scalar(
@@ -2025,8 +2003,8 @@ def render_readiness(user: User) -> None:
             )
     if rows:
         readiness_df = pd.DataFrame(rows).set_index("Date")
-        st.line_chart(readiness_df[["Readiness"]], use_container_width=True)
-        st.dataframe(readiness_df.reset_index(), use_container_width=True, hide_index=True)
+        st.line_chart(readiness_df[["Readiness"]], width="stretch")
+        st.dataframe(readiness_df.reset_index(), width="stretch", hide_index=True)
     else:
         st.markdown('<div class="nv-empty">Save daily check-ins to build your readiness trend.</div>', unsafe_allow_html=True)
 
@@ -2049,7 +2027,7 @@ def render_workouts(user: User) -> None:
             duration = c1.number_input("Duration (minutes)", min_value=0, max_value=600, value=45)
             calories = c2.number_input("Estimated calories burned", min_value=0, max_value=5000, value=0)
             notes = st.text_area("Notes", height=90)
-            submitted = st.form_submit_button("Save workout session", type="primary", use_container_width=True)
+            submitted = st.form_submit_button("Save workout session", type="primary", width="stretch")
         if submitted:
             if not workout_name.strip():
                 st.error("Enter a workout name.")
@@ -2075,7 +2053,7 @@ def render_workouts(user: User) -> None:
                 c4, c5 = st.columns(2)
                 distance = c4.number_input("Distance (miles)", min_value=0.0, max_value=500.0, value=0.0, step=0.1)
                 set_duration = c5.number_input("Set duration (minutes)", min_value=0.0, max_value=600.0, value=0.0, step=0.5)
-                submitted = st.form_submit_button("Save exercise set", type="primary", use_container_width=True)
+                submitted = st.form_submit_button("Save exercise set", type="primary", width="stretch")
             if submitted:
                 if not exercise_name.strip():
                     st.error("Enter an exercise name.")
@@ -2101,7 +2079,7 @@ def render_workouts(user: User) -> None:
                         sets = session.scalars(select(ExerciseSet).where(ExerciseSet.session_id == workout.id).order_by(ExerciseSet.exercise_name, ExerciseSet.set_number)).all()
                     if sets:
                         df = pd.DataFrame([{"Exercise": x.exercise_name, "Set": x.set_number, "Reps": x.reps, "Weight (lb)": x.weight_lb, "Distance (mi)": x.distance_miles, "Minutes": x.duration_min} for x in sets])
-                        st.dataframe(df, use_container_width=True, hide_index=True)
+                        st.dataframe(df, width="stretch", hide_index=True)
                     else:
                         st.caption("No detailed exercise sets saved.")
                     if st.button("Delete workout", key=f"delete_workout_{workout.id}"):
@@ -2125,7 +2103,7 @@ def render_progress(user: User) -> None:
         arm = c6.number_input("Arm (in)", min_value=0.0, max_value=80.0, value=0.0, step=0.1)
         thigh = c7.number_input("Thigh (in)", min_value=0.0, max_value=100.0, value=0.0, step=0.1)
         notes = st.text_area("Notes", height=80)
-        submitted = st.form_submit_button("Save measurement", type="primary", use_container_width=True)
+        submitted = st.form_submit_button("Save measurement", type="primary", width="stretch")
     if submitted:
         values = [weight, body_fat, waist, chest, hips, arm, thigh]
         if not any(v > 0 for v in values):
@@ -2144,8 +2122,8 @@ def render_progress(user: User) -> None:
         chart_choice = st.selectbox("Chart", ["Weight (lb)", "Body fat (%)", "Waist (in)", "Chest (in)", "Hips (in)"])
         chart_df = df[["Date", chart_choice]].dropna().set_index("Date")
         if not chart_df.empty:
-            st.line_chart(chart_df, use_container_width=True)
-        st.dataframe(df.drop(columns=["ID"]), use_container_width=True, hide_index=True)
+            st.line_chart(chart_df, width="stretch")
+        st.dataframe(df.drop(columns=["ID"]), width="stretch", hide_index=True)
         delete_id = st.selectbox("Remove a measurement", [None] + list(reversed(df["ID"].tolist())), format_func=lambda value: "Select an entry" if value is None else f"Measurement #{value}")
         if st.button("Delete selected measurement", disabled=delete_id is None):
             with SessionLocal() as session:
@@ -2167,7 +2145,7 @@ def render_goals(user: User) -> None:
         current = c3.number_input("Current value", value=0.0)
         target = c4.number_input("Target value", value=1.0)
         target_date = c5.date_input("Target date", value=date.today() + timedelta(days=30), format="MM/DD/YYYY")
-        submitted = st.form_submit_button("Create goal", type="primary", use_container_width=True)
+        submitted = st.form_submit_button("Create goal", type="primary", width="stretch")
     if submitted:
         if not title.strip():
             st.error("Enter a goal title.")
@@ -2229,7 +2207,7 @@ def render_profile(user: User) -> None:
         carb_target = c5.number_input("Carbs (g)", min_value=0, max_value=1500, value=user.carb_target)
         fat_target = c6.number_input("Fat (g)", min_value=0, max_value=500, value=user.fat_target)
         water_target_oz = st.number_input("Water target (fl oz)", min_value=8.0, max_value=512.0, value=round(ml_to_fl_oz(user.water_target_ml), 1), step=1.0)
-        submitted = st.form_submit_button("Save profile", type="primary", use_container_width=True)
+        submitted = st.form_submit_button("Save profile", type="primary", width="stretch")
     if submitted:
         with SessionLocal() as session:
             owned = get_user(session, user.id)
@@ -2293,14 +2271,14 @@ def render_data_account(user: User) -> None:
     hero("Data and account", "Control your information", "Export your records, change your password, or permanently delete your account.")
     st.subheader("Export")
     export_bytes = create_export(user)
-    st.download_button("Download account data", data=export_bytes, file_name=f"nourivolt_{user.username}_export.zip", mime="application/zip", use_container_width=True)
+    st.download_button("Download account data", data=export_bytes, file_name=f"nourivolt_{user.username}_export.zip", mime="application/zip", width="stretch")
 
     st.subheader("Change password")
     with st.form("password_form"):
         current = st.text_input("Current password", type="password")
         new = st.text_input("New password", type="password")
         confirm = st.text_input("Confirm new password", type="password")
-        submitted = st.form_submit_button("Change password", type="primary", use_container_width=True)
+        submitted = st.form_submit_button("Change password", type="primary", width="stretch")
     if submitted:
         if new != confirm:
             st.error("The new passwords do not match.")
@@ -2320,7 +2298,7 @@ def render_data_account(user: User) -> None:
     st.warning("This permanently removes your profile and every saved record.")
     with st.form("delete_account_form"):
         confirmation = st.text_input(f"Type DELETE {user.username} to confirm")
-        submitted = st.form_submit_button("Delete my account", use_container_width=True)
+        submitted = st.form_submit_button("Delete my account", width="stretch")
     if submitted:
         if confirmation.strip() != f"DELETE {user.username}":
             st.error("The confirmation text does not match.")
