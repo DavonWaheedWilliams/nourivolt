@@ -24,15 +24,12 @@ at.button[2].click().run()
 
 pages = [
     "Dashboard",
-    "NouriVolt Elite",
-    "Smart Scan",
     "Nutrition",
     "Workouts",
     "Readiness",
     "Progress",
-    "Goals",
-    "Profile",
-    "Data & account",
+    "NouriVolt Elite",
+    "Settings",
 ]
 
 for page in pages:

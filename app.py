@@ -1454,8 +1454,43 @@ def sidebar(user: User) -> None:
     with st.sidebar:
         st.markdown('<div class="nv-brand">Nouri<span>Volt</span></div>', unsafe_allow_html=True)
         st.markdown(f'<div class="nv-user">Signed in as {user.display_name or user.username}</div>', unsafe_allow_html=True)
-        pages = ["Dashboard", "NouriVolt Elite", "Smart Scan", "Nutrition", "Workouts", "Readiness", "Progress", "Goals", "Profile", "Data & account"]
-        chosen = st.radio("Navigation", pages, index=pages.index(st.session_state.page), label_visibility="collapsed")
+
+        # Move users from the former standalone pages into their new parent sections.
+        legacy_page_map = {
+            "Smart Scan": ("Nutrition", "Smart Scan"),
+            "Goals": ("Progress", "Goals"),
+            "Profile": ("Settings", "Profile"),
+            "Data & account": ("Settings", "Data & account"),
+        }
+        current_page = st.session_state.get("page", "Dashboard")
+        if current_page in legacy_page_map:
+            parent_page, subpage = legacy_page_map[current_page]
+            st.session_state.page = parent_page
+            if parent_page == "Nutrition":
+                st.session_state.nutrition_subpage = subpage
+            elif parent_page == "Progress":
+                st.session_state.progress_subpage = subpage
+            elif parent_page == "Settings":
+                st.session_state.settings_subpage = subpage
+
+        pages = [
+            "Dashboard",
+            "Nutrition",
+            "Workouts",
+            "Readiness",
+            "Progress",
+            "NouriVolt Elite",
+            "Settings",
+        ]
+        if st.session_state.page not in pages:
+            st.session_state.page = "Dashboard"
+
+        chosen = st.radio(
+            "Navigation",
+            pages,
+            index=pages.index(st.session_state.page),
+            label_visibility="collapsed",
+        )
         if chosen != st.session_state.page:
             st.session_state.page = chosen
             st.rerun()
@@ -2524,6 +2559,66 @@ def render_data_account(user: User) -> None:
             st.rerun()
 
 
+def render_nutrition_center(user: User) -> None:
+    """Group food logging and scan tools under one navigation destination."""
+    options = ["Food & water", "Smart Scan"]
+    current = st.session_state.get("nutrition_subpage", options[0])
+    if current not in options:
+        current = options[0]
+    selected = st.radio(
+        "Nutrition tools",
+        options,
+        index=options.index(current),
+        horizontal=True,
+        key="nutrition_section_selector",
+    )
+    st.session_state.nutrition_subpage = selected
+    if selected == "Smart Scan":
+        render_smart_scan(user)
+    else:
+        render_nutrition(user)
+
+
+def render_progress_center(user: User) -> None:
+    """Group measurements and goals under one progress destination."""
+    options = ["Measurements", "Goals"]
+    current = st.session_state.get("progress_subpage", options[0])
+    if current not in options:
+        current = options[0]
+    selected = st.radio(
+        "Progress tools",
+        options,
+        index=options.index(current),
+        horizontal=True,
+        key="progress_section_selector",
+    )
+    st.session_state.progress_subpage = selected
+    if selected == "Goals":
+        render_goals(user)
+    else:
+        render_progress(user)
+
+
+def render_settings_center(user: User) -> None:
+    """Group profile controls and account management under Settings."""
+    options = ["Profile", "Data & account"]
+    current = st.session_state.get("settings_subpage", options[0])
+    if current not in options:
+        current = options[0]
+    selected = st.radio(
+        "Settings tools",
+        options,
+        index=options.index(current),
+        horizontal=True,
+        key="settings_section_selector",
+    )
+    st.session_state.settings_subpage = selected
+    if selected == "Data & account":
+        render_data_account(user)
+    else:
+        render_profile(user)
+
+
 def render_app() -> None:
     init_state()
     inject_css()
@@ -2552,6 +2647,14 @@ def render_app() -> None:
     page = st.session_state.page
     if page == "Dashboard":
         render_dashboard(user)
+    elif page == "Nutrition":
+        render_nutrition_center(user)
+    elif page == "Workouts":
+        render_workouts(user)
+    elif page == "Readiness":
+        render_readiness(user)
+    elif page == "Progress":
+        render_progress_center(user)
     elif page == "NouriVolt Elite":
         render_elite_hub(user, {
             "models": ELITE_MODELS,
@@ -2573,22 +2676,8 @@ def render_app() -> None:
             "hash_password": hash_password,
             "verify_password": verify_password,
         })
-    elif page == "Smart Scan":
-        render_smart_scan(user)
-    elif page == "Nutrition":
-        render_nutrition(user)
-    elif page == "Workouts":
-        render_workouts(user)
-    elif page == "Readiness":
-        render_readiness(user)
-    elif page == "Progress":
-        render_progress(user)
-    elif page == "Goals":
-        render_goals(user)
-    elif page == "Profile":
-        render_profile(user)
-    elif page == "Data & account":
-        render_data_account(user)
+    elif page == "Settings":
+        render_settings_center(user)
 
 
 if __name__ == "__main__":
