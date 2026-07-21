@@ -8,7 +8,6 @@ import sys
 import zipfile
 from statistics import mean
 from datetime import date, datetime, timedelta
-from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any
 
@@ -46,12 +45,88 @@ APP_NAME = "NouriVolt"
 APP_TAGLINE = "Train with intent. Fuel with clarity."
 CM_PER_INCH = 2.54
 ML_PER_FL_OZ = 29.5735295625
-LOCAL_TIMEZONE = ZoneInfo("America/Chicago")
 
-
-def local_today() -> date:
-    """Return the current calendar date in Nashville/Central Time."""
-    return datetime.now(LOCAL_TIMEZONE).date()
+EXERCISE_LIBRARY: dict[str, list[str]] = {
+    "Chest": [
+        "Barbell Bench Press", "Dumbbell Bench Press", "Incline Barbell Bench Press",
+        "Incline Dumbbell Press", "Decline Bench Press", "Chest Press Machine",
+        "Push-Up", "Wide-Grip Push-Up", "Diamond Push-Up", "Chest Dip",
+        "Dumbbell Fly", "Cable Fly", "Pec Deck Fly", "Landmine Press",
+    ],
+    "Back": [
+        "Deadlift", "Pull-Up", "Chin-Up", "Lat Pulldown", "Barbell Row",
+        "Dumbbell Row", "Seated Cable Row", "Chest-Supported Row", "T-Bar Row",
+        "Inverted Row", "Straight-Arm Pulldown", "Back Extension", "Superman",
+    ],
+    "Shoulders": [
+        "Overhead Press", "Dumbbell Shoulder Press", "Arnold Press",
+        "Machine Shoulder Press", "Push Press", "Lateral Raise", "Front Raise",
+        "Rear Delt Fly", "Face Pull", "Upright Row", "Cable Lateral Raise",
+        "Reverse Pec Deck", "Shrug", "Handstand Push-Up",
+    ],
+    "Biceps": [
+        "Barbell Curl", "Dumbbell Curl", "Hammer Curl", "Incline Dumbbell Curl",
+        "Preacher Curl", "Cable Curl", "Concentration Curl", "EZ-Bar Curl",
+        "Reverse Curl", "Spider Curl",
+    ],
+    "Triceps": [
+        "Triceps Pushdown", "Overhead Triceps Extension", "Skull Crusher",
+        "Close-Grip Bench Press", "Triceps Dip", "Bench Dip",
+        "Dumbbell Kickback", "Cable Overhead Extension", "Diamond Push-Up",
+    ],
+    "Forearms and Grip": [
+        "Wrist Curl", "Reverse Wrist Curl", "Farmer's Carry", "Dead Hang",
+        "Plate Pinch", "Towel Pull-Up", "Wrist Roller", "Suitcase Carry",
+    ],
+    "Quadriceps": [
+        "Back Squat", "Front Squat", "Goblet Squat", "Leg Press", "Hack Squat",
+        "Leg Extension", "Walking Lunge", "Reverse Lunge",
+        "Bulgarian Split Squat", "Step-Up", "Wall Sit",
+    ],
+    "Hamstrings": [
+        "Romanian Deadlift", "Stiff-Leg Deadlift", "Lying Leg Curl",
+        "Seated Leg Curl", "Good Morning", "Nordic Hamstring Curl",
+        "Single-Leg Romanian Deadlift", "Glute-Ham Raise", "Kettlebell Swing",
+    ],
+    "Glutes": [
+        "Barbell Hip Thrust", "Glute Bridge", "Cable Kickback", "Sumo Squat",
+        "Sumo Deadlift", "Bulgarian Split Squat", "Step-Up", "Walking Lunge",
+        "Frog Pump", "Clamshell", "Lateral Band Walk", "Donkey Kick",
+    ],
+    "Calves": [
+        "Standing Calf Raise", "Seated Calf Raise", "Single-Leg Calf Raise",
+        "Leg Press Calf Raise", "Donkey Calf Raise", "Jump Rope", "Tibialis Raise",
+    ],
+    "Core": [
+        "Plank", "Side Plank", "Crunch", "Bicycle Crunch", "Reverse Crunch",
+        "Sit-Up", "Hanging Leg Raise", "Knee Raise", "Russian Twist", "Dead Bug",
+        "Bird Dog", "Ab Wheel Rollout", "Cable Crunch", "Pallof Press",
+        "Mountain Climber", "V-Up", "Hollow Hold",
+    ],
+    "Full Body": [
+        "Burpee", "Thruster", "Clean and Press", "Power Clean", "Snatch",
+        "Kettlebell Swing", "Turkish Get-Up", "Bear Crawl", "Sled Push",
+        "Sled Pull", "Battle Ropes", "Medicine Ball Slam", "Farmer's Carry",
+    ],
+    "Cardio": [
+        "Walking", "Brisk Walking", "Treadmill Walking", "Running",
+        "Treadmill Running", "Cycling", "Stationary Bike", "Elliptical",
+        "Stair Climber", "Rowing Machine", "Swimming", "Jump Rope", "Hiking",
+        "Dance Cardio", "Boxing", "Kickboxing",
+    ],
+    "Mobility and Recovery": [
+        "Dynamic Warm-Up", "Foam Rolling", "Hip Flexor Stretch",
+        "Hamstring Stretch", "Quadriceps Stretch", "Calf Stretch",
+        "Chest Stretch", "Shoulder Stretch", "Thoracic Rotation",
+        "World's Greatest Stretch", "Cat-Cow", "Child's Pose",
+        "Yoga Flow", "Breathing Exercise",
+    ],
+    "Sports": [
+        "Basketball", "Football", "Soccer", "Tennis", "Volleyball",
+        "Pickleball", "Golf", "Martial Arts", "Skating", "Skiing",
+    ],
+}
+CUSTOM_EXERCISE_OPTION = "Custom exercise"
 
 st.set_page_config(
     page_title=f"{APP_NAME} | Fitness and Nutrition",
@@ -1312,7 +1387,7 @@ def today_nutrition(session: Session, user: User, selected_date: date) -> dict[s
 
 def render_dashboard(user: User) -> None:
     hero("Today", f"Welcome back, {user.display_name or user.username}", "See your daily targets, recent training, and current progress in one place.")
-    selected_date = st.date_input("Dashboard date", value=local_today(), format="MM/DD/YYYY", key="dashboard_date")
+    selected_date = st.date_input("Dashboard date", value=date.today(), format="MM/DD/YYYY", key="dashboard_date")
 
     with SessionLocal() as session:
         totals = today_nutrition(session, user, selected_date)
@@ -1441,7 +1516,7 @@ def render_dashboard(user: User) -> None:
 
 def render_nutrition(user: User) -> None:
     hero("Nutrition", "Fuel your day", "Log meals, monitor calories and macros, and keep hydration visible.")
-    selected_date = st.date_input("Log date", value=local_today(), format="MM/DD/YYYY", key="nutrition_date")
+    selected_date = st.date_input("Log date", value=date.today(), format="MM/DD/YYYY", key="nutrition_date")
 
     with SessionLocal() as session:
         totals = today_nutrition(session, user, selected_date)
@@ -1625,7 +1700,7 @@ def render_smart_scan(user: User) -> None:
                     )
 
                 with st.form("save_food_photo_result"):
-                    log_date = st.date_input("Diary date", value=local_today(), format="MM/DD/YYYY", key="food_photo_log_date")
+                    log_date = st.date_input("Diary date", value=date.today(), format="MM/DD/YYYY", key="food_photo_log_date")
                     meal = st.selectbox("Meal", ["Breakfast", "Lunch", "Dinner", "Snack"], key="food_photo_meal")
                     food_name = st.text_input("Food name", value=str(result.get("dish_name") or "Scanned meal"))
                     serving = st.text_input("Serving", value=str(result.get("serving_description") or "1 serving"))
@@ -1762,7 +1837,7 @@ def render_smart_scan(user: User) -> None:
                 render_macro_result(barcode_result, "Product database result")
 
                 with st.form("save_barcode_result"):
-                    log_date = st.date_input("Diary date", value=local_today(), format="MM/DD/YYYY", key="barcode_log_date")
+                    log_date = st.date_input("Diary date", value=date.today(), format="MM/DD/YYYY", key="barcode_log_date")
                     meal = st.selectbox("Meal", ["Breakfast", "Lunch", "Dinner", "Snack"], key="barcode_meal")
                     food_name = st.text_input("Food name", value=str(product.get("product_name") or "Scanned product"))
                     serving = st.text_input("Serving", value=f"{servings:g} × {serving_text}")
@@ -1804,7 +1879,7 @@ def render_smart_scan(user: User) -> None:
                         st.write(ingredients)
 
     with navigator_tab:
-        target_date = st.date_input("Plan date", value=local_today(), format="MM/DD/YYYY", key="navigator_date")
+        target_date = st.date_input("Plan date", value=date.today(), format="MM/DD/YYYY", key="navigator_date")
         with SessionLocal() as session:
             totals = today_nutrition(session, user, target_date)
         remaining_meals = st.slider("Meals remaining", min_value=1, max_value=4, value=2)
@@ -1883,7 +1958,7 @@ def render_readiness(user: User) -> None:
         "Readiness Pulse",
         "Combine sleep, energy, stress, soreness, mood, nutrition, and hydration into a daily training signal.",
     )
-    selected_date = st.date_input("Check-in date", value=local_today(), format="MM/DD/YYYY", key="readiness_date")
+    selected_date = st.date_input("Check-in date", value=date.today(), format="MM/DD/YYYY", key="readiness_date")
     with SessionLocal() as session:
         existing = session.scalar(
             select(DailyCheckIn).where(
@@ -2027,7 +2102,7 @@ def render_workouts(user: User) -> None:
 
     with tab_session:
         with st.form("workout_session_form", clear_on_submit=True):
-            workout_date = st.date_input("Workout date", value=local_today(), format="MM/DD/YYYY")
+            workout_date = st.date_input("Workout date", value=date.today(), format="MM/DD/YYYY")
             workout_name = st.text_input("Workout name", placeholder="Upper body strength")
             category = st.selectbox("Category", ["Strength", "Cardio", "Mobility", "Sports", "HIIT", "Recovery", "Other"])
             c1, c2 = st.columns(2)
@@ -2050,9 +2125,37 @@ def render_workouts(user: User) -> None:
             st.info("Save a workout session first.")
         else:
             session_options = {s.id: f"{s.workout_date.strftime('%m/%d/%Y')} · {s.workout_name}" for s in sessions}
+            session_id = st.selectbox(
+                "Workout session",
+                list(session_options),
+                format_func=session_options.get,
+                key="exercise_set_session",
+            )
+
+            selector_left, selector_right = st.columns(2)
+            body_part = selector_left.selectbox(
+                "Body part or activity",
+                list(EXERCISE_LIBRARY),
+                key="exercise_body_part",
+            )
+            exercise_options = [*EXERCISE_LIBRARY[body_part], CUSTOM_EXERCISE_OPTION]
+            selected_exercise = selector_right.selectbox(
+                "Exercise",
+                exercise_options,
+                key="exercise_library_choice",
+            )
+
+            custom_exercise = ""
+            if selected_exercise == CUSTOM_EXERCISE_OPTION:
+                custom_exercise = st.text_input(
+                    "Unique exercise name",
+                    placeholder="Enter your exercise name",
+                    key="custom_exercise_name",
+                )
+            exercise_name = custom_exercise.strip() if selected_exercise == CUSTOM_EXERCISE_OPTION else selected_exercise
+
+            st.caption("Choose a standard exercise by body part, or select Custom exercise to enter your own.")
             with st.form("exercise_set_form", clear_on_submit=True):
-                session_id = st.selectbox("Workout session", list(session_options), format_func=session_options.get)
-                exercise_name = st.text_input("Exercise")
                 c1, c2, c3 = st.columns(3)
                 set_number = c1.number_input("Set number", min_value=1, max_value=50, value=1)
                 reps = c2.number_input("Reps", min_value=0, max_value=1000, value=10)
@@ -2062,13 +2165,13 @@ def render_workouts(user: User) -> None:
                 set_duration = c5.number_input("Set duration (minutes)", min_value=0.0, max_value=600.0, value=0.0, step=0.5)
                 submitted = st.form_submit_button("Save exercise set", type="primary", width="stretch")
             if submitted:
-                if not exercise_name.strip():
-                    st.error("Enter an exercise name.")
+                if not exercise_name:
+                    st.error("Enter a unique exercise name.")
                 else:
                     with SessionLocal() as session:
                         owned = session.scalar(select(WorkoutSession).where(WorkoutSession.id == session_id, WorkoutSession.user_id == user.id))
                         if owned:
-                            session.add(ExerciseSet(session_id=session_id, exercise_name=exercise_name.strip(), set_number=int(set_number), reps=int(reps), weight_lb=float(weight), distance_miles=float(distance), duration_min=float(set_duration)))
+                            session.add(ExerciseSet(session_id=session_id, exercise_name=exercise_name, set_number=int(set_number), reps=int(reps), weight_lb=float(weight), distance_miles=float(distance), duration_min=float(set_duration)))
                             session.commit()
                     st.success("Exercise set saved.")
                     st.rerun()
@@ -2099,7 +2202,7 @@ def render_workouts(user: User) -> None:
 def render_progress(user: User) -> None:
     hero("Progress", "Measure what changes", "Track weight, body composition, and measurements over time.")
     with st.form("measurement_form", clear_on_submit=True):
-        measurement_date = st.date_input("Measurement date", value=local_today(), format="MM/DD/YYYY")
+        measurement_date = st.date_input("Measurement date", value=date.today(), format="MM/DD/YYYY")
         c1, c2, c3 = st.columns(3)
         weight = c1.number_input("Weight (lb)", min_value=0.0, max_value=1500.0, value=0.0, step=0.1)
         body_fat = c2.number_input("Body fat (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.1)
@@ -2151,7 +2254,7 @@ def render_goals(user: User) -> None:
         c3, c4, c5 = st.columns(3)
         current = c3.number_input("Current value", value=0.0)
         target = c4.number_input("Target value", value=1.0)
-        target_date = c5.date_input("Target date", value=local_today() + timedelta(days=30), format="MM/DD/YYYY")
+        target_date = c5.date_input("Target date", value=date.today() + timedelta(days=30), format="MM/DD/YYYY")
         submitted = st.form_submit_button("Create goal", type="primary", width="stretch")
     if submitted:
         if not title.strip():
