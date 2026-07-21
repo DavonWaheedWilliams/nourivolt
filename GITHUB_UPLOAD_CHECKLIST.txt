@@ -1,0 +1,27 @@
+NOURIVOLT GITHUB WEBSITE UPLOAD CHECKLIST
+
+The GitHub repository root must contain:
+- app.py
+- vision_services.py
+- requirements.txt
+- .gitignore
+- .streamlit/config.toml
+
+Do not upload:
+- data/nourivolt.db
+- .streamlit/secrets.toml
+- API keys
+- database passwords
+
+GitHub website upload:
+1. Extract this ZIP file.
+2. Open your GitHub repository.
+3. Select Add file > Upload files.
+4. Drag app.py, vision_services.py, requirements.txt, and .gitignore into the upload page.
+5. To add the hidden config file, select Add file > Create new file.
+6. Enter .streamlit/config.toml as the filename.
+7. Copy the contents from the extracted .streamlit/config.toml file.
+8. Commit changes to main.
+9. In Streamlit Community Cloud, confirm Main file path is app.py.
+10. Add DATABASE_URL and OPENAI_API_KEY in Streamlit App settings > Secrets.
+11. Reboot the app and review the deployment log.
