@@ -85,3 +85,14 @@ The Elite Suite creates new tables automatically. It does not rename or delete t
 ## Native mobile integrations
 
 The Wearable Bridge supports manual entry and CSV exports now. Direct Apple Health and Android Health Connect permission access requires a native iOS or Android companion application. Garmin and Fitbit live synchronization require their developer approval and OAuth credentials. The Streamlit app keeps connector-ready import workflows so these integrations can be added without changing the core database.
+
+## Consolidated navigation
+
+NouriVolt now uses six main navigation sections without removing features:
+
+- Dashboard
+- Nutrition: food and water, Smart Scan, Food Intelligence, Macro Forecast, Fuel Gap Map, saved meals, meal planning, grocery and pantry tools
+- Workouts: workout log, exercise sets, programs, progressive overload, personal records, recovery map, and rest tools
+- Readiness: daily check-ins, voice logging, wearable imports, and Recovery-to-Training Match
+- Progress & Goals: measurements, goals, trend forecasts, and Adaptive Coach reports
+- Settings: profile, data exports, account management, family profiles, coach mode, security, and premium-ready controls

@@ -1556,6 +1556,41 @@ def _render_family_security(user: Any, ctx: dict[str, Any]) -> None:
         st.markdown("Planned premium controls: unlimited AI scans, advanced coaching history, wearable connectors, trainer access, family planning, and extended reports.")
 
 
+def render_adaptive_coach(user: Any, ctx: dict[str, Any]) -> None:
+    inject_elite_css()
+    _render_coach(user, ctx)
+
+
+def render_food_intelligence(user: Any, ctx: dict[str, Any]) -> None:
+    inject_elite_css()
+    _render_food_intelligence(user, ctx)
+
+
+def render_training_lab(user: Any, ctx: dict[str, Any]) -> None:
+    inject_elite_css()
+    _render_training_lab(user, ctx)
+
+
+def render_meal_planner(user: Any, ctx: dict[str, Any]) -> None:
+    inject_elite_css()
+    _render_meal_planner(user, ctx)
+
+
+def render_elite_progress_center(user: Any, ctx: dict[str, Any]) -> None:
+    inject_elite_css()
+    _render_progress_center(user, ctx)
+
+
+def render_voice_and_wearables(user: Any, ctx: dict[str, Any]) -> None:
+    inject_elite_css()
+    _render_voice_wearables(user, ctx)
+
+
+def render_family_and_security(user: Any, ctx: dict[str, Any]) -> None:
+    inject_elite_css()
+    _render_family_security(user, ctx)
+
+
 def render_elite_hub(user: Any, ctx: dict[str, Any]) -> None:
     inject_elite_css()
     ctx["hero"](

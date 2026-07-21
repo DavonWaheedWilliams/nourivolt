@@ -32,7 +32,13 @@ from elite_features import (
     issue_recovery_code,
     login_allowed,
     register_login_result,
-    render_elite_hub,
+    render_adaptive_coach,
+    render_elite_progress_center,
+    render_family_and_security,
+    render_food_intelligence,
+    render_meal_planner,
+    render_training_lab,
+    render_voice_and_wearables,
     reset_password_with_recovery,
     session_timeout_minutes,
 )
@@ -1455,10 +1461,12 @@ def sidebar(user: User) -> None:
         st.markdown('<div class="nv-brand">Nouri<span>Volt</span></div>', unsafe_allow_html=True)
         st.markdown(f'<div class="nv-user">Signed in as {user.display_name or user.username}</div>', unsafe_allow_html=True)
 
-        # Move users from the former standalone pages into their new parent sections.
+        # Move users from former standalone pages into the consolidated sections.
         legacy_page_map = {
             "Smart Scan": ("Nutrition", "Smart Scan"),
-            "Goals": ("Progress", "Goals"),
+            "Goals": ("Progress & Goals", "Goals"),
+            "Progress": ("Progress & Goals", "Measurements"),
+            "NouriVolt Elite": ("Progress & Goals", "Adaptive Coach"),
             "Profile": ("Settings", "Profile"),
             "Data & account": ("Settings", "Data & account"),
         }
@@ -1468,7 +1476,7 @@ def sidebar(user: User) -> None:
             st.session_state.page = parent_page
             if parent_page == "Nutrition":
                 st.session_state.nutrition_subpage = subpage
-            elif parent_page == "Progress":
+            elif parent_page == "Progress & Goals":
                 st.session_state.progress_subpage = subpage
             elif parent_page == "Settings":
                 st.session_state.settings_subpage = subpage
@@ -1478,8 +1486,7 @@ def sidebar(user: User) -> None:
             "Nutrition",
             "Workouts",
             "Readiness",
-            "Progress",
-            "NouriVolt Elite",
+            "Progress & Goals",
             "Settings",
         ]
         if st.session_state.page not in pages:
@@ -2559,9 +2566,33 @@ def render_data_account(user: User) -> None:
             st.rerun()
 
 
+def elite_context() -> dict[str, Any]:
+    """Build the shared context used by consolidated Elite tools."""
+    return {
+        "models": ELITE_MODELS,
+        "SessionLocal": SessionLocal,
+        "User": User,
+        "FoodLog": FoodLog,
+        "WaterLog": WaterLog,
+        "WorkoutSession": WorkoutSession,
+        "ExerciseSet": ExerciseSet,
+        "Measurement": Measurement,
+        "Goal": Goal,
+        "DailyCheckIn": DailyCheckIn,
+        "EXERCISE_LIBRARY": EXERCISE_LIBRARY,
+        "hero": hero,
+        "metric_card": metric_card,
+        "today_nutrition": today_nutrition,
+        "readiness_score": readiness_score,
+        "readiness_label": readiness_label,
+        "hash_password": hash_password,
+        "verify_password": verify_password,
+    }
+
+
 def render_nutrition_center(user: User) -> None:
-    """Group food logging and scan tools under one navigation destination."""
-    options = ["Food & water", "Smart Scan"]
+    """Keep all food, scanning, forecasting, and meal-planning tools together."""
+    options = ["Food & water", "Smart Scan", "Food Intelligence", "Meal Planner"]
     current = st.session_state.get("nutrition_subpage", options[0])
     if current not in options:
         current = options[0]
@@ -2575,18 +2606,62 @@ def render_nutrition_center(user: User) -> None:
     st.session_state.nutrition_subpage = selected
     if selected == "Smart Scan":
         render_smart_scan(user)
+    elif selected == "Food Intelligence":
+        render_food_intelligence(user, elite_context())
+    elif selected == "Meal Planner":
+        render_meal_planner(user, elite_context())
     else:
         render_nutrition(user)
 
 
+def render_workouts_center(user: User) -> None:
+    """Keep workout logging and advanced training tools together."""
+    options = ["Workout Log", "Training Lab"]
+    current = st.session_state.get("workouts_subpage", options[0])
+    if current not in options:
+        current = options[0]
+    selected = st.radio(
+        "Workout tools",
+        options,
+        index=options.index(current),
+        horizontal=True,
+        key="workouts_section_selector",
+    )
+    st.session_state.workouts_subpage = selected
+    if selected == "Training Lab":
+        render_training_lab(user, elite_context())
+    else:
+        render_workouts(user)
+
+
+def render_readiness_center(user: User) -> None:
+    """Keep check-ins, wearable records, voice capture, and recovery matching together."""
+    options = ["Daily Readiness", "Voice & Wearables"]
+    current = st.session_state.get("readiness_subpage", options[0])
+    if current not in options:
+        current = options[0]
+    selected = st.radio(
+        "Readiness tools",
+        options,
+        index=options.index(current),
+        horizontal=True,
+        key="readiness_section_selector",
+    )
+    st.session_state.readiness_subpage = selected
+    if selected == "Voice & Wearables":
+        render_voice_and_wearables(user, elite_context())
+    else:
+        render_readiness(user)
+
+
 def render_progress_center(user: User) -> None:
-    """Group measurements and goals under one progress destination."""
-    options = ["Measurements", "Goals"]
+    """Keep measurements, goals, forecasting, and adaptive coaching together."""
+    options = ["Measurements", "Goals", "Trends & Forecasts", "Adaptive Coach"]
     current = st.session_state.get("progress_subpage", options[0])
     if current not in options:
         current = options[0]
     selected = st.radio(
-        "Progress tools",
+        "Progress and goal tools",
         options,
         index=options.index(current),
         horizontal=True,
@@ -2595,13 +2670,17 @@ def render_progress_center(user: User) -> None:
     st.session_state.progress_subpage = selected
     if selected == "Goals":
         render_goals(user)
+    elif selected == "Trends & Forecasts":
+        render_elite_progress_center(user, elite_context())
+    elif selected == "Adaptive Coach":
+        render_adaptive_coach(user, elite_context())
     else:
         render_progress(user)
 
 
 def render_settings_center(user: User) -> None:
-    """Group profile controls and account management under Settings."""
-    options = ["Profile", "Data & account"]
+    """Keep profile, data, family, coach, security, and billing tools together."""
+    options = ["Profile", "Data & account", "Family & Security"]
     current = st.session_state.get("settings_subpage", options[0])
     if current not in options:
         current = options[0]
@@ -2615,9 +2694,10 @@ def render_settings_center(user: User) -> None:
     st.session_state.settings_subpage = selected
     if selected == "Data & account":
         render_data_account(user)
+    elif selected == "Family & Security":
+        render_family_and_security(user, elite_context())
     else:
         render_profile(user)
-
 
 def render_app() -> None:
     init_state()
@@ -2650,32 +2730,11 @@ def render_app() -> None:
     elif page == "Nutrition":
         render_nutrition_center(user)
     elif page == "Workouts":
-        render_workouts(user)
+        render_workouts_center(user)
     elif page == "Readiness":
-        render_readiness(user)
-    elif page == "Progress":
+        render_readiness_center(user)
+    elif page == "Progress & Goals":
         render_progress_center(user)
-    elif page == "NouriVolt Elite":
-        render_elite_hub(user, {
-            "models": ELITE_MODELS,
-            "SessionLocal": SessionLocal,
-            "User": User,
-            "FoodLog": FoodLog,
-            "WaterLog": WaterLog,
-            "WorkoutSession": WorkoutSession,
-            "ExerciseSet": ExerciseSet,
-            "Measurement": Measurement,
-            "Goal": Goal,
-            "DailyCheckIn": DailyCheckIn,
-            "EXERCISE_LIBRARY": EXERCISE_LIBRARY,
-            "hero": hero,
-            "metric_card": metric_card,
-            "today_nutrition": today_nutrition,
-            "readiness_score": readiness_score,
-            "readiness_label": readiness_label,
-            "hash_password": hash_password,
-            "verify_password": verify_password,
-        })
     elif page == "Settings":
         render_settings_center(user)
 

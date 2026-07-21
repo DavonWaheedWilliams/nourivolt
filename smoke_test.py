@@ -27,8 +27,7 @@ pages = [
     "Nutrition",
     "Workouts",
     "Readiness",
-    "Progress",
-    "NouriVolt Elite",
+    "Progress & Goals",
     "Settings",
 ]
 
