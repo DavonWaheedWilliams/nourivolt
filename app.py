@@ -6,6 +6,7 @@ import os
 import re
 import sys
 import zipfile
+from functools import wraps
 from statistics import mean
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -25,6 +26,16 @@ from vision_services import (
     decode_barcode,
     lookup_open_food_facts,
 )
+from elite_features import (
+    elite_export_files,
+    install_elite_models,
+    issue_recovery_code,
+    login_allowed,
+    register_login_result,
+    render_elite_hub,
+    reset_password_with_recovery,
+    session_timeout_minutes,
+)
 from sqlalchemy import (
     Boolean,
     Date,
@@ -43,6 +54,51 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, rela
 
 APP_NAME = "NouriVolt"
 APP_TAGLINE = "Train with intent. Fuel with clarity."
+
+
+def _streamlit_version_tuple() -> tuple[int, int, int]:
+    """Return a numeric Streamlit version tuple without extra dependencies."""
+    parts = []
+    for piece in str(getattr(st, "__version__", "0.0.0")).split(".")[:3]:
+        match = re.match(r"(\d+)", piece)
+        parts.append(int(match.group(1)) if match else 0)
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts[:3])
+
+
+def _install_streamlit_width_compatibility() -> None:
+    """Translate modern width values for Streamlit releases before 1.50."""
+    if _streamlit_version_tuple() >= (1, 50, 0):
+        return
+
+    component_names = (
+        "button",
+        "form_submit_button",
+        "download_button",
+        "dataframe",
+        "line_chart",
+    )
+
+    for component_name in component_names:
+        original = getattr(st, component_name, None)
+        if original is None:
+            continue
+
+        @wraps(original)
+        def compatible_component(*args, __original=original, width=None, **kwargs):
+            if width == "stretch":
+                kwargs["use_container_width"] = True
+            elif width == "content":
+                kwargs["use_container_width"] = False
+            elif width is not None:
+                kwargs["width"] = width
+            return __original(*args, **kwargs)
+
+        setattr(st, component_name, compatible_component)
+
+
+_install_streamlit_width_compatibility()
 CM_PER_INCH = 2.54
 ML_PER_FL_OZ = 29.5735295625
 
@@ -156,7 +212,7 @@ class User(Base):
     carb_target: Mapped[int] = mapped_column(Integer, default=240)
     fat_target: Mapped[int] = mapped_column(Integer, default=70)
     water_target_ml: Mapped[int] = mapped_column(Integer, default=2500)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     food_logs: Mapped[list[FoodLog]] = relationship(cascade="all, delete-orphan")
     water_logs: Mapped[list[WaterLog]] = relationship(cascade="all, delete-orphan")
@@ -181,7 +237,7 @@ class FoodLog(Base):
     carbs_g: Mapped[float] = mapped_column(Float, default=0)
     fat_g: Mapped[float] = mapped_column(Float, default=0)
     notes: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
 class WaterLog(Base):
@@ -191,7 +247,7 @@ class WaterLog(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     log_date: Mapped[date] = mapped_column(Date, index=True)
     amount_ml: Mapped[int] = mapped_column(Integer)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
 class WorkoutSession(Base):
@@ -205,7 +261,7 @@ class WorkoutSession(Base):
     duration_min: Mapped[int] = mapped_column(Integer, default=0)
     calories_burned: Mapped[int] = mapped_column(Integer, default=0)
     notes: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     sets: Mapped[list[ExerciseSet]] = relationship(cascade="all, delete-orphan")
 
@@ -238,7 +294,7 @@ class Measurement(Base):
     arm_in: Mapped[float | None] = mapped_column(Float, nullable=True)
     thigh_in: Mapped[float | None] = mapped_column(Float, nullable=True)
     notes: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
 class Goal(Base):
@@ -253,7 +309,7 @@ class Goal(Base):
     unit: Mapped[str] = mapped_column(String(30), default="")
     target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
 class SmartScan(Base):
@@ -273,7 +329,7 @@ class SmartScan(Base):
     fiber_g: Mapped[float] = mapped_column(Float, default=0)
     confidence: Mapped[float] = mapped_column(Float, default=0)
     notes: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
 class DailyCheckIn(Base):
@@ -289,7 +345,11 @@ class DailyCheckIn(Base):
     soreness: Mapped[int] = mapped_column(Integer, default=5)
     mood: Mapped[int] = mapped_column(Integer, default=5)
     notes: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+# Elite tables are additive. Existing NouriVolt tables and records remain unchanged.
+ELITE_MODELS = install_elite_models(Base)
 
 
 def get_database_url() -> str:
@@ -978,6 +1038,12 @@ def init_state() -> None:
         "food_scan_result": None,
         "barcode_product": None,
         "barcode_value": "",
+        "elite_food_results": [],
+        "elite_coach_report": "",
+        "elite_voice_transcript": "",
+        "elite_voice_result": None,
+        "elite_new_recovery_code": "",
+        "last_activity_at": datetime.now(),
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -1010,16 +1076,27 @@ def create_account(username: str, email: str, password: str, display_name: str) 
         )
         session.add(user)
         session.commit()
-        return True, "Account created. Sign in to continue."
+        recovery_code = issue_recovery_code(SessionLocal, ELITE_MODELS, user.id, hash_password)
+        st.session_state.elite_new_recovery_code = recovery_code
+        return True, "Account created. Save the one-time recovery code shown below, then sign in."
 
 
 def authenticate(login: str, password: str) -> User | None:
     login = login.strip().lower()
+    allowed, message = login_allowed(SessionLocal, ELITE_MODELS, User, login)
+    if not allowed:
+        st.session_state.auth_error = message
+        return None
     with SessionLocal() as session:
         user = session.scalar(select(User).where((User.username == login) | (User.email == login)))
         if user and verify_password(password, user.password_hash):
+            user_id = user.id
             session.expunge(user)
+            register_login_result(SessionLocal, ELITE_MODELS, User, login, user_id, True)
+            st.session_state.auth_error = ""
             return user
+    register_login_result(SessionLocal, ELITE_MODELS, User, login, None, False)
+    st.session_state.auth_error = "The username, email, or password is incorrect."
     return None
 
 
@@ -1324,9 +1401,28 @@ def render_auth() -> None:
                     st.session_state.user_id = user.id
                     st.session_state.username = user.username
                     st.session_state.page = "Dashboard"
+                    st.session_state.last_activity_at = datetime.now()
                     st.rerun()
                 else:
-                    st.error("The username, email, or password is incorrect.")
+                    st.error(st.session_state.get("auth_error") or "The username, email, or password is incorrect.")
+            with st.expander("Forgot password or locked out?"):
+                with st.form("recovery_reset_form"):
+                    recovery_login = st.text_input("Username or email", key="recovery_login")
+                    recovery_code = st.text_input("Recovery code", type="password")
+                    new_password = st.text_input("New password", type="password", key="recovery_new_password")
+                    new_confirm = st.text_input("Confirm new password", type="password", key="recovery_confirm_password")
+                    reset_submitted = st.form_submit_button("Reset password", width="stretch")
+                if reset_submitted:
+                    if new_password != new_confirm:
+                        st.error("The new passwords do not match.")
+                    elif len(new_password) < 8 or not re.search(r"[A-Za-z]", new_password) or not re.search(r"\d", new_password):
+                        st.error("Use at least 8 characters with one letter and one number.")
+                    else:
+                        ok, message = reset_password_with_recovery(
+                            SessionLocal, ELITE_MODELS, User, verify_password, hash_password,
+                            recovery_login, recovery_code, new_password,
+                        )
+                        st.success(message) if ok else st.error(message)
         else:
             with st.form("create_account_form"):
                 display_name = st.text_input("Display name")
@@ -1346,6 +1442,9 @@ def render_auth() -> None:
                     ok, message = create_account(username, email, password, display_name)
                     if ok:
                         st.success(message)
+                        if st.session_state.get("elite_new_recovery_code"):
+                            st.warning("Save this recovery code now. It is required if you forget your password.")
+                            st.code(st.session_state.elite_new_recovery_code)
                         st.session_state.auth_mode = "Sign in"
                     else:
                         st.error(message)
@@ -1355,7 +1454,7 @@ def sidebar(user: User) -> None:
     with st.sidebar:
         st.markdown('<div class="nv-brand">Nouri<span>Volt</span></div>', unsafe_allow_html=True)
         st.markdown(f'<div class="nv-user">Signed in as {user.display_name or user.username}</div>', unsafe_allow_html=True)
-        pages = ["Dashboard", "Smart Scan", "Nutrition", "Workouts", "Readiness", "Progress", "Goals", "Profile", "Data & account"]
+        pages = ["Dashboard", "NouriVolt Elite", "Smart Scan", "Nutrition", "Workouts", "Readiness", "Progress", "Goals", "Profile", "Data & account"]
         chosen = st.radio("Navigation", pages, index=pages.index(st.session_state.page), label_visibility="collapsed")
         if chosen != st.session_state.page:
             st.session_state.page = chosen
@@ -2374,6 +2473,8 @@ def create_export(user: User) -> bytes:
         archive.writestr("goals.csv", dataframe_csv(goal_export_rows))
         archive.writestr("smart_scans.csv", dataframe_csv([{c.name: getattr(x, c.name) for c in SmartScan.__table__.columns if c.name != "user_id"} for x in smart_scans]))
         archive.writestr("daily_checkins.csv", dataframe_csv([{c.name: getattr(x, c.name) for c in DailyCheckIn.__table__.columns if c.name != "user_id"} for x in daily_checkins]))
+        for elite_filename, elite_bytes in elite_export_files(SessionLocal, ELITE_MODELS, user.id).items():
+            archive.writestr(f"elite/{elite_filename}", elite_bytes)
     return output.getvalue()
 
 
@@ -2430,6 +2531,16 @@ def render_app() -> None:
         render_auth()
         return
 
+    timeout_minutes = session_timeout_minutes(SessionLocal, ELITE_MODELS, int(st.session_state.user_id))
+    last_activity = st.session_state.get("last_activity_at") or datetime.now()
+    if datetime.now() - last_activity > timedelta(minutes=timeout_minutes):
+        st.session_state.user_id = None
+        st.session_state.username = None
+        st.session_state.page = "Dashboard"
+        st.session_state.auth_error = "Your session expired. Sign in again."
+        st.rerun()
+    st.session_state.last_activity_at = datetime.now()
+
     with SessionLocal() as session:
         user = get_user(session, int(st.session_state.user_id))
         if not user:
@@ -2441,6 +2552,27 @@ def render_app() -> None:
     page = st.session_state.page
     if page == "Dashboard":
         render_dashboard(user)
+    elif page == "NouriVolt Elite":
+        render_elite_hub(user, {
+            "models": ELITE_MODELS,
+            "SessionLocal": SessionLocal,
+            "User": User,
+            "FoodLog": FoodLog,
+            "WaterLog": WaterLog,
+            "WorkoutSession": WorkoutSession,
+            "ExerciseSet": ExerciseSet,
+            "Measurement": Measurement,
+            "Goal": Goal,
+            "DailyCheckIn": DailyCheckIn,
+            "EXERCISE_LIBRARY": EXERCISE_LIBRARY,
+            "hero": hero,
+            "metric_card": metric_card,
+            "today_nutrition": today_nutrition,
+            "readiness_score": readiness_score,
+            "readiness_label": readiness_label,
+            "hash_password": hash_password,
+            "verify_password": verify_password,
+        })
     elif page == "Smart Scan":
         render_smart_scan(user)
     elif page == "Nutrition":

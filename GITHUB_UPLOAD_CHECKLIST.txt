@@ -1,27 +1,39 @@
-NOURIVOLT GITHUB WEBSITE UPLOAD CHECKLIST
+NOURIVOLT ELITE GITHUB UPLOAD CHECKLIST
 
-The GitHub repository root must contain:
-- app.py
-- vision_services.py
-- requirements.txt
-- .gitignore
-- .streamlit/config.toml
+Upload these files and folders to the repository root:
+
+app.py
+vision_services.py
+elite_features.py
+elite_services.py
+requirements.txt
+README.md
+UPGRADE_TO_ELITE.md
+FEATURE_STATUS.md
+smoke_test.py
+.gitignore
+.streamlit/config.toml
 
 Do not upload:
-- data/nourivolt.db
-- .streamlit/secrets.toml
-- API keys
-- database passwords
 
-GitHub website upload:
-1. Extract this ZIP file.
-2. Open your GitHub repository.
-3. Select Add file > Upload files.
-4. Drag app.py, vision_services.py, requirements.txt, and .gitignore into the upload page.
-5. To add the hidden config file, select Add file > Create new file.
-6. Enter .streamlit/config.toml as the filename.
-7. Copy the contents from the extracted .streamlit/config.toml file.
-8. Commit changes to main.
-9. In Streamlit Community Cloud, confirm Main file path is app.py.
-10. Add DATABASE_URL and OPENAI_API_KEY in Streamlit App settings > Secrets.
-11. Reboot the app and review the deployment log.
+data/
+*.db
+.streamlit/secrets.toml
+.env
+__pycache__/
+
+Streamlit Community Cloud settings:
+
+Repository: your GitHub repository
+Branch: main
+Main file path: app.py
+
+Add private values under Streamlit App settings > Secrets:
+
+DATABASE_URL = "complete Neon PostgreSQL connection string"
+OPENAI_API_KEY = "OpenAI API key"
+FDC_API_KEY = "USDA FoodData Central API key"
+OPEN_FOOD_FACTS_USER_AGENT = "NouriVolt/3.0 (your-email@example.com)"
+STRIPE_PAYMENT_LINK = "optional Stripe subscription payment link"
+
+Keep the existing DATABASE_URL to preserve deployed accounts and records.
