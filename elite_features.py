@@ -939,6 +939,43 @@ def _render_training_lab(user: Any, ctx: dict[str, Any]) -> None:
             programs = session.scalars(select(models.WorkoutProgram).where(models.WorkoutProgram.user_id == user.id).order_by(models.WorkoutProgram.created_at.desc())).all()
         if programs:
             program = st.selectbox("Program", programs, format_func=lambda x: f"{x.name} · {x.goal}")
+
+            with st.expander("Manage selected program"):
+                st.caption(
+                    f"Delete {program.name} and all exercises saved inside it. "
+                    "Workout sessions already created from this program will remain in your workout history."
+                )
+                confirm_program_delete = st.checkbox(
+                    f"I understand that {program.name} will be permanently deleted.",
+                    key=f"confirm_program_delete_{program.id}",
+                )
+                if st.button(
+                    "Delete selected program",
+                    key=f"delete_program_{program.id}",
+                    type="primary",
+                    width="stretch",
+                    disabled=not confirm_program_delete,
+                ):
+                    with SessionLocal() as session:
+                        owned_program = session.scalar(
+                            select(models.WorkoutProgram).where(
+                                models.WorkoutProgram.id == program.id,
+                                models.WorkoutProgram.user_id == user.id,
+                            )
+                        )
+                        if owned_program:
+                            session.execute(
+                                delete(models.WorkoutProgramExercise).where(
+                                    models.WorkoutProgramExercise.program_id == owned_program.id
+                                )
+                            )
+                            session.delete(owned_program)
+                            session.commit()
+                            st.success("Program deleted.")
+                        else:
+                            st.error("The selected program was not found.")
+                    st.rerun()
+
             st.subheader("Add program exercise")
             c1, c2 = st.columns(2)
             day_name = c1.text_input("Training day", value="Day 1")
