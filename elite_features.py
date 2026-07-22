@@ -150,6 +150,18 @@ def install_elite_models(Base: Any) -> SimpleNamespace:
         expires_on: Mapped[date | None] = mapped_column(Date, nullable=True)
         created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
+    class GroceryListItem(Base):
+        __tablename__ = "grocery_list_items"
+        id: Mapped[int] = mapped_column(Integer, primary_key=True)
+        user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+        ingredient: Mapped[str] = mapped_column(String(180))
+        quantity: Mapped[float] = mapped_column(Float, default=1)
+        unit: Mapped[str] = mapped_column(String(50), default="item")
+        planned_uses: Mapped[int] = mapped_column(Integer, default=1)
+        purchased: Mapped[bool] = mapped_column(Boolean, default=False)
+        notes: Mapped[str] = mapped_column(Text, default="")
+        created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
     class WorkoutProgram(Base):
         __tablename__ = "workout_programs"
         id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -247,7 +259,7 @@ def install_elite_models(Base: Any) -> SimpleNamespace:
         recovery_code_hash: Mapped[str] = mapped_column(String(255), default="")
         failed_login_count: Mapped[int] = mapped_column(Integer, default=0)
         locked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-        session_timeout_min: Mapped[int] = mapped_column(Integer, default=90)
+        session_timeout_min: Mapped[int] = mapped_column(Integer, default=1440)
         plan_tier: Mapped[str] = mapped_column(String(30), default="Core")
         created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
@@ -266,6 +278,7 @@ def install_elite_models(Base: Any) -> SimpleNamespace:
         SavedMealItem=SavedMealItem,
         MealPlanEntry=MealPlanEntry,
         PantryItem=PantryItem,
+        GroceryListItem=GroceryListItem,
         WorkoutProgram=WorkoutProgram,
         WorkoutProgramExercise=WorkoutProgramExercise,
         CoachReport=CoachReport,
@@ -403,11 +416,19 @@ def register_login_result(
 
 
 def session_timeout_minutes(SessionLocal: Any, models: SimpleNamespace, user_id: int) -> int:
+    """Return the inactivity timeout in minutes.
+
+    Accounts that still have the former 90-minute default are upgraded to a
+    24-hour inactivity window. The user can choose up to seven days.
+    """
     with SessionLocal() as session:
         profile = _get_security(session, models, user_id)
-        value = int(profile.session_timeout_min or 90)
+        value = int(profile.session_timeout_min or 1440)
+        if value == 90:
+            value = 1440
+            profile.session_timeout_min = value
         session.commit()
-    return max(15, min(value, 720))
+    return max(60, min(value, 10080))
 
 
 def inject_elite_css() -> None:
@@ -1383,13 +1404,154 @@ def _render_meal_planner(user: Any, ctx: dict[str, Any]) -> None:
                 key = str(ingredient).strip()
                 if key and key.lower() not in pantry_names:
                     grocery[key] = grocery.get(key, 0) + 1
-        st.subheader("Automatic grocery list")
-        if grocery:
-            grocery_df = pd.DataFrame([{"Ingredient": key, "Planned uses": count} for key, count in sorted(grocery.items())])
-            st.dataframe(grocery_df, width="stretch", hide_index=True)
-            st.download_button("Download grocery list", data=grocery_df.to_csv(index=False).encode(), file_name="nourivanta_grocery_list.csv", mime="text/csv", width="stretch")
-        else:
-            st.info("Generate a meal plan or add custom meals with ingredients to build the grocery list.")
+        st.subheader("Adjustable grocery list")
+        with SessionLocal() as session:
+            saved_grocery = session.scalars(
+                select(models.GroceryListItem)
+                .where(models.GroceryListItem.user_id == user.id)
+                .order_by(models.GroceryListItem.purchased, models.GroceryListItem.ingredient)
+            ).all()
+
+        automatic_rows = [
+            {
+                "Purchased": False,
+                "Ingredient": key,
+                "Quantity": float(count),
+                "Unit": "planned use",
+                "Planned uses": int(count),
+                "Notes": "",
+            }
+            for key, count in sorted(grocery.items())
+        ]
+        saved_rows = [
+            {
+                "Purchased": bool(item.purchased),
+                "Ingredient": item.ingredient,
+                "Quantity": float(item.quantity),
+                "Unit": item.unit,
+                "Planned uses": int(item.planned_uses),
+                "Notes": item.notes,
+            }
+            for item in saved_grocery
+        ]
+
+        action_left, action_right = st.columns(2)
+        with action_left:
+            sync_automatic = st.button(
+                "Add missing meal-plan items",
+                width="stretch",
+                disabled=not bool(automatic_rows),
+                help="Adds ingredients from the next seven days without replacing your adjustments.",
+            )
+        with action_right:
+            reset_automatic = st.button(
+                "Reset list from meal plan",
+                width="stretch",
+                disabled=not bool(automatic_rows),
+                help="Replaces the saved grocery list with the current automatic list.",
+            )
+
+        if sync_automatic:
+            with SessionLocal() as session:
+                existing = session.scalars(
+                    select(models.GroceryListItem).where(models.GroceryListItem.user_id == user.id)
+                ).all()
+                existing_names = {item.ingredient.strip().lower() for item in existing}
+                for row in automatic_rows:
+                    if row["Ingredient"].strip().lower() not in existing_names:
+                        session.add(models.GroceryListItem(
+                            user_id=user.id,
+                            ingredient=row["Ingredient"],
+                            quantity=row["Quantity"],
+                            unit=row["Unit"],
+                            planned_uses=row["Planned uses"],
+                        ))
+                session.commit()
+            st.session_state.pop("editable_grocery_list", None)
+            st.rerun()
+
+        if reset_automatic:
+            with SessionLocal() as session:
+                session.execute(delete(models.GroceryListItem).where(models.GroceryListItem.user_id == user.id))
+                for row in automatic_rows:
+                    session.add(models.GroceryListItem(
+                        user_id=user.id,
+                        ingredient=row["Ingredient"],
+                        quantity=row["Quantity"],
+                        unit=row["Unit"],
+                        planned_uses=row["Planned uses"],
+                    ))
+                session.commit()
+            st.session_state.pop("editable_grocery_list", None)
+            st.rerun()
+
+        editor_rows = saved_rows if saved_rows else automatic_rows
+        if not editor_rows:
+            editor_rows = [{
+                "Purchased": False,
+                "Ingredient": "",
+                "Quantity": 1.0,
+                "Unit": "item",
+                "Planned uses": 1,
+                "Notes": "",
+            }]
+            st.info("Generate a meal plan or add grocery items directly below.")
+
+        grocery_editor = st.data_editor(
+            pd.DataFrame(editor_rows),
+            width="stretch",
+            hide_index=True,
+            num_rows="dynamic",
+            key="editable_grocery_list",
+            column_config={
+                "Purchased": st.column_config.CheckboxColumn("Purchased"),
+                "Ingredient": st.column_config.TextColumn("Ingredient", required=True),
+                "Quantity": st.column_config.NumberColumn("Quantity", min_value=0.0, step=0.5, format="%.1f"),
+                "Unit": st.column_config.TextColumn("Unit"),
+                "Planned uses": st.column_config.NumberColumn("Planned uses", min_value=0, step=1, format="%d"),
+                "Notes": st.column_config.TextColumn("Notes"),
+            },
+        )
+
+        save_col, remove_col = st.columns(2)
+        with save_col:
+            save_grocery = st.button("Save grocery adjustments", type="primary", width="stretch")
+        with remove_col:
+            remove_purchased = st.button("Remove purchased items", width="stretch")
+
+        if save_grocery or remove_purchased:
+            clean_rows = []
+            for row in grocery_editor.to_dict("records"):
+                ingredient = str(row.get("Ingredient") or "").strip()
+                if not ingredient:
+                    continue
+                purchased = bool(row.get("Purchased", False))
+                if remove_purchased and purchased:
+                    continue
+                clean_rows.append({
+                    "ingredient": ingredient,
+                    "quantity": max(0.0, _float(row.get("Quantity"), 1.0)),
+                    "unit": str(row.get("Unit") or "item").strip() or "item",
+                    "planned_uses": max(0, int(_float(row.get("Planned uses"), 1))),
+                    "purchased": purchased,
+                    "notes": str(row.get("Notes") or "").strip(),
+                })
+            with SessionLocal() as session:
+                session.execute(delete(models.GroceryListItem).where(models.GroceryListItem.user_id == user.id))
+                for row in clean_rows:
+                    session.add(models.GroceryListItem(user_id=user.id, **row))
+                session.commit()
+            st.session_state.pop("editable_grocery_list", None)
+            st.success("Grocery list updated.")
+            st.rerun()
+
+        st.download_button(
+            "Download adjusted grocery list",
+            data=grocery_editor.to_csv(index=False).encode(),
+            file_name="nourivanta_grocery_list.csv",
+            mime="text/csv",
+            width="stretch",
+        )
         st.metric("Estimated planned grocery cost", f"${estimated_cost:,.2f}")
 
 
@@ -1612,82 +1774,70 @@ def _render_voice_wearables(user: Any, ctx: dict[str, Any]) -> None:
 
 
 def _render_family_security(user: Any, ctx: dict[str, Any]) -> None:
+    """Render security and optional subscription controls.
+
+    Family profiles and Coach Mode are intentionally hidden. Existing records
+    and tables are retained so no historical data is deleted.
+    """
     models = ctx["models"]
     SessionLocal = ctx["SessionLocal"]
-    family_tab, coach_tab, security_tab, premium_tab = st.tabs(["Family profiles", "Coach mode", "Security", "Premium-ready"])
-    with family_tab:
-        with st.form("household_profile"):
-            c1, c2 = st.columns(2)
-            name = c1.text_input("Profile name")
-            relationship = c2.text_input("Relationship", value="Family")
-            c3, c4, c5 = st.columns(3)
-            age = c3.number_input("Age", min_value=0, max_value=120, value=0)
-            calories = c4.number_input("Calorie target", min_value=500, max_value=10000, value=2000)
-            protein = c5.number_input("Protein target", min_value=0, max_value=1000, value=100)
-            private = st.checkbox("Keep measurements private", value=True)
-            add = st.form_submit_button("Add family profile", type="primary", width="stretch")
-        if add and name.strip():
-            with SessionLocal() as session:
-                session.add(models.HouseholdProfile(owner_user_id=user.id, name=name.strip(), relationship=relationship.strip(), age=int(age) or None, calorie_target=int(calories), protein_target=int(protein), private_measurements=private))
-                session.commit()
-            st.rerun()
-        with SessionLocal() as session:
-            profiles = session.scalars(select(models.HouseholdProfile).where(models.HouseholdProfile.owner_user_id == user.id)).all()
-        if profiles:
-            st.dataframe(pd.DataFrame([{"Name": x.name, "Relationship": x.relationship, "Age": x.age, "Calories": x.calorie_target, "Protein": x.protein_target, "Private measurements": x.private_measurements} for x in profiles]), width="stretch", hide_index=True)
-    with coach_tab:
-        with SessionLocal() as session:
-            pref = _get_preferences(session, models, user.id)
-            if not pref.coach_share_code:
-                pref.coach_share_code = secrets.token_urlsafe(8)
-            share_code = pref.coach_share_code
-            session.commit()
-        st.code(share_code)
-        st.caption("Share this code only with someone you trust. It identifies the export you choose to share. It does not expose your password.")
-        if st.button("Rotate coach share code"):
-            with SessionLocal() as session:
-                pref = _get_preferences(session, models, user.id)
-                pref.coach_share_code = secrets.token_urlsafe(8)
-                session.commit()
-            st.rerun()
-        with st.form("coach_note"):
-            c1, c2 = st.columns(2)
-            note_date = c1.date_input("Note date", value=local_today(), format="MM/DD/YYYY")
-            coach_name = c2.text_input("Coach or reviewer", value="Coach")
-            category = st.selectbox("Category", ["General", "Nutrition", "Training", "Recovery", "Goal"])
-            note = st.text_area("Coach note")
-            save = st.form_submit_button("Save coach note", type="primary", width="stretch")
-        if save and note.strip():
-            with SessionLocal() as session:
-                session.add(models.CoachNote(user_id=user.id, note_date=note_date, coach_name=coach_name.strip() or "Coach", category=category, note=note.strip()))
-                session.commit()
-            st.success("Coach note saved.")
-        with SessionLocal() as session:
-            notes = session.scalars(select(models.CoachNote).where(models.CoachNote.user_id == user.id).order_by(models.CoachNote.note_date.desc())).all()
-        if notes:
-            st.dataframe(pd.DataFrame([{"Date": x.note_date.strftime("%m/%d/%Y"), "Coach": x.coach_name, "Category": x.category, "Note": x.note} for x in notes]), width="stretch", hide_index=True)
+    security_tab, premium_tab = st.tabs(["Security", "Premium-ready"])
+
     with security_tab:
         with SessionLocal() as session:
             security = _get_security(session, models, user.id)
-            timeout_value = security.session_timeout_min
-            events = session.scalars(select(models.LoginEvent).where(models.LoginEvent.user_id == user.id).order_by(models.LoginEvent.event_time.desc()).limit(20)).all()
+            timeout_value = int(security.session_timeout_min or 1440)
+            if timeout_value == 90:
+                timeout_value = 1440
+                security.session_timeout_min = timeout_value
+            events = session.scalars(
+                select(models.LoginEvent)
+                .where(models.LoginEvent.user_id == user.id)
+                .order_by(models.LoginEvent.event_time.desc())
+                .limit(20)
+            ).all()
             session.commit()
-        timeout = st.number_input("Automatic sign-out after inactive minutes", min_value=15, max_value=720, value=int(timeout_value), step=15)
+
+        timeout = st.number_input(
+            "Automatic sign-out after inactive minutes",
+            min_value=60,
+            max_value=10080,
+            value=max(60, min(timeout_value, 10080)),
+            step=60,
+            help="The default is 1,440 minutes, or 24 hours. The maximum is seven days.",
+        )
+        st.caption(f"Current inactivity window: {timeout / 60:g} hour(s).")
         if st.button("Save session timeout"):
             with SessionLocal() as session:
                 security = _get_security(session, models, user.id)
                 security.session_timeout_min = int(timeout)
                 session.commit()
             st.success("Session timeout saved.")
+
         if st.button("Generate a new recovery code"):
             code = issue_recovery_code(SessionLocal, models, user.id, ctx["hash_password"])
             st.session_state.elite_new_recovery_code = code
         if st.session_state.get("elite_new_recovery_code"):
             st.warning("Save this recovery code in a secure place. Generating another code invalidates this one.")
             st.code(st.session_state.elite_new_recovery_code)
+
         st.subheader("Recent account access")
         if events:
-            st.dataframe(pd.DataFrame([{"Date": utc_naive_to_local(x.event_time).strftime("%m/%d/%Y %I:%M %p"), "Success": x.success, "Client": x.client_info} for x in events]), width="stretch", hide_index=True)
+            st.dataframe(
+                pd.DataFrame([
+                    {
+                        "Date": utc_naive_to_local(x.event_time).strftime("%m/%d/%Y %I:%M %p"),
+                        "Success": x.success,
+                        "Client": x.client_info,
+                    }
+                    for x in events
+                ]),
+                width="stretch",
+                hide_index=True,
+            )
+        else:
+            st.info("Recent login activity will appear here.")
+
     with premium_tab:
         payment_link = os.getenv("STRIPE_PAYMENT_LINK", "").strip()
         st.markdown("**Premium structure is ready for a hosted Stripe subscription link.** Core app data and features stay available even when billing is not configured.")
@@ -1695,43 +1845,7 @@ def _render_family_security(user: Any, ctx: dict[str, Any]) -> None:
             st.link_button("Open NouriVanta Elite subscription", payment_link)
         else:
             st.info("Set STRIPE_PAYMENT_LINK in your hosting secrets to display a live subscription checkout button.")
-        st.markdown("Planned premium controls: unlimited AI scans, advanced coaching history, wearable connectors, trainer access, family planning, and extended reports.")
-
-
-def render_adaptive_coach(user: Any, ctx: dict[str, Any]) -> None:
-    inject_elite_css()
-    _render_coach(user, ctx)
-
-
-def render_food_intelligence(user: Any, ctx: dict[str, Any]) -> None:
-    inject_elite_css()
-    _render_food_intelligence(user, ctx)
-
-
-def render_training_lab(user: Any, ctx: dict[str, Any]) -> None:
-    inject_elite_css()
-    _render_training_lab(user, ctx)
-
-
-def render_meal_planner(user: Any, ctx: dict[str, Any]) -> None:
-    inject_elite_css()
-    _render_meal_planner(user, ctx)
-
-
-def render_elite_progress_center(user: Any, ctx: dict[str, Any]) -> None:
-    inject_elite_css()
-    _render_progress_center(user, ctx)
-
-
-def render_voice_and_wearables(user: Any, ctx: dict[str, Any]) -> None:
-    inject_elite_css()
-    _render_voice_wearables(user, ctx)
-
-
-def render_family_and_security(user: Any, ctx: dict[str, Any]) -> None:
-    inject_elite_css()
-    _render_family_security(user, ctx)
-
+        st.markdown("Planned premium controls: unlimited AI scans, advanced coaching history, wearable connectors, extended reports, and other optional services.")
 
 def render_elite_hub(user: Any, ctx: dict[str, Any]) -> None:
     inject_elite_css()
@@ -1752,7 +1866,7 @@ def render_elite_hub(user: Any, ctx: dict[str, Any]) -> None:
     )
     tabs = st.tabs([
         "Adaptive Coach",
-        "Food Intelligence",
+        "Nutrition Insights",
         "Training Lab",
         "Meal Planner",
         "Progress Center",
@@ -1781,6 +1895,7 @@ def elite_export_files(SessionLocal: Any, models: SimpleNamespace, user_id: int)
         "saved_meals.csv": models.SavedMeal,
         "meal_plan_entries.csv": models.MealPlanEntry,
         "pantry_items.csv": models.PantryItem,
+        "grocery_list_items.csv": models.GroceryListItem,
         "workout_programs.csv": models.WorkoutProgram,
         "coach_reports.csv": models.CoachReport,
         "wearable_metrics.csv": models.WearableMetric,

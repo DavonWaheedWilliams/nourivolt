@@ -144,6 +144,7 @@ def _install_streamlit_width_compatibility() -> None:
         "form_submit_button",
         "download_button",
         "dataframe",
+        "data_editor",
         "line_chart",
     )
 
@@ -2017,16 +2018,25 @@ def render_dashboard(user: User) -> None:
 
     with SessionLocal() as session:
         totals = today_nutrition(session, user, selected_date)
-        workout_count = session.scalar(
-            select(func.count(WorkoutSession.id)).where(
-                WorkoutSession.user_id == user.id, WorkoutSession.workout_date == selected_date
+        day_workouts = session.scalars(
+            select(WorkoutSession).where(
+                WorkoutSession.user_id == user.id,
+                WorkoutSession.workout_date == selected_date,
             )
-        ) or 0
-        workout_minutes = session.scalar(
-            select(func.coalesce(func.sum(WorkoutSession.duration_min), 0)).where(
-                WorkoutSession.user_id == user.id, WorkoutSession.workout_date == selected_date
-            )
-        ) or 0
+        ).all()
+        workout_count = len(day_workouts)
+        workout_minutes = 0
+        for workout in day_workouts:
+            saved_minutes = int(workout.duration_min or 0)
+            if saved_minutes > 0:
+                workout_minutes += saved_minutes
+                continue
+            set_minutes = session.scalar(
+                select(func.coalesce(func.sum(ExerciseSet.duration_min), 0)).where(
+                    ExerciseSet.session_id == workout.id
+                )
+            ) or 0
+            workout_minutes += int(round(float(set_minutes)))
         latest_measurements = session.scalars(
             select(Measurement).where(Measurement.user_id == user.id).order_by(Measurement.measurement_date.desc()).limit(12)
         ).all()
@@ -2780,7 +2790,8 @@ def render_workouts(user: User) -> None:
                 with SessionLocal() as session:
                     session.add(WorkoutSession(user_id=user.id, workout_date=workout_date, workout_name=workout_name.strip(), category=category, duration_min=int(duration), calories_burned=int(calories), notes=notes.strip()))
                     session.commit()
-                st.success("Workout saved.")
+                st.session_state["dashboard_date"] = workout_date
+                st.success(f"Workout saved. The dashboard will show {int(duration)} training minute(s) for {workout_date.strftime('%m/%d/%Y')}.")
                 st.rerun()
 
     with tab_set:
@@ -3131,7 +3142,7 @@ def elite_context() -> dict[str, Any]:
 
 def render_nutrition_center(user: User) -> None:
     """Keep all food, scanning, forecasting, and meal-planning tools together."""
-    options = ["Food & water", "Smart Scan", "Food Intelligence", "Meal Planner"]
+    options = ["Food & water", "Smart Scan", "Nutrition Insights", "Meal Planner"]
     current = st.session_state.get("nutrition_subpage", options[0])
     if current not in options:
         current = options[0]
@@ -3146,7 +3157,7 @@ def render_nutrition_center(user: User) -> None:
     st.session_state.nutrition_subpage = selected
     if selected == "Smart Scan":
         render_smart_scan(user)
-    elif selected == "Food Intelligence":
+    elif selected == "Nutrition Insights":
         render_food_intelligence(user, elite_context())
     elif selected == "Meal Planner":
         render_meal_planner(user, elite_context())
@@ -3285,9 +3296,11 @@ def render_timezone_settings(user: User) -> None:
 
 
 def render_settings_center(user: User) -> None:
-    """Keep profile, time zone, data, family, coach, security, and billing tools together."""
-    options = ["Profile", "Time zone", "Data & account", "Family & Security"]
+    """Keep profile, time zone, data, security, and optional billing tools together."""
+    options = ["Profile", "Time zone", "Data & account", "Security"]
     current = st.session_state.get("settings_subpage", options[0])
+    if current == "Family & Security":
+        current = "Security"
     if current not in options:
         current = options[0]
     selected = st.radio(
@@ -3303,7 +3316,7 @@ def render_settings_center(user: User) -> None:
         render_timezone_settings(user)
     elif selected == "Data & account":
         render_data_account(user)
-    elif selected == "Family & Security":
+    elif selected == "Security":
         render_family_and_security(user, elite_context())
     else:
         render_profile(user)
