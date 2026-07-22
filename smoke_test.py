@@ -6,7 +6,7 @@ from pathlib import Path
 from streamlit.testing.v1 import AppTest
 
 ROOT = Path(__file__).resolve().parent
-DB_PATH = ROOT / "nourivolt_smoke_test.db"
+DB_PATH = ROOT / "nourivanta_smoke_test.db"
 os.environ["DATABASE_URL"] = f"sqlite:///{DB_PATH.as_posix()}"
 
 at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=60).run()
@@ -36,4 +36,4 @@ for page in pages:
     if at.exception:
         raise RuntimeError(f"{page} failed: {at.exception}")
 
-print("NouriVolt smoke test passed for all pages.")
+print("NouriVanta smoke test passed for all pages.")

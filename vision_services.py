@@ -16,7 +16,7 @@ OPEN_FOOD_FACTS_V3 = "https://world.openfoodfacts.org/api/v3.6/product/{barcode}
 OPEN_FOOD_FACTS_V2 = "https://world.openfoodfacts.org/api/v2/product/{barcode}.json"
 OPEN_FOOD_FACTS_USER_AGENT = os.getenv(
     "OPEN_FOOD_FACTS_USER_AGENT",
-    "NouriVolt/2.0 (nutrition-app@example.com)",
+    "NouriVanta/3.0 (nutrition-app@example.com)",
 )
 
 

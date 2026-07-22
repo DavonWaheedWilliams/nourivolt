@@ -541,7 +541,7 @@ def _deterministic_coach_report(metrics: dict[str, Any]) -> str:
 def _render_coach(user: Any, ctx: dict[str, Any]) -> None:
     models = ctx["models"]
     SessionLocal = ctx["SessionLocal"]
-    st.subheader("NouriVolt Adaptive Coach")
+    st.subheader("NouriVanta Adaptive Coach")
     days = st.selectbox("Report window", [7, 14, 30, 90], index=0, format_func=lambda x: f"Last {x} days")
     metrics = _period_metrics(ctx, user, days)
     st.markdown(
@@ -1304,7 +1304,7 @@ def _render_meal_planner(user: Any, ctx: dict[str, Any]) -> None:
         if grocery:
             grocery_df = pd.DataFrame([{"Ingredient": key, "Planned uses": count} for key, count in sorted(grocery.items())])
             st.dataframe(grocery_df, width="stretch", hide_index=True)
-            st.download_button("Download grocery list", data=grocery_df.to_csv(index=False).encode(), file_name="nourivolt_grocery_list.csv", mime="text/csv", width="stretch")
+            st.download_button("Download grocery list", data=grocery_df.to_csv(index=False).encode(), file_name="nourivanta_grocery_list.csv", mime="text/csv", width="stretch")
         else:
             st.info("Generate a meal plan or add custom meals with ingredients to build the grocery list.")
         st.metric("Estimated planned grocery cost", f"${estimated_cost:,.2f}")
@@ -1609,7 +1609,7 @@ def _render_family_security(user: Any, ctx: dict[str, Any]) -> None:
         payment_link = os.getenv("STRIPE_PAYMENT_LINK", "").strip()
         st.markdown("**Premium structure is ready for a hosted Stripe subscription link.** Core app data and features stay available even when billing is not configured.")
         if payment_link:
-            st.link_button("Open NouriVolt Elite subscription", payment_link)
+            st.link_button("Open NouriVanta Elite subscription", payment_link)
         else:
             st.info("Set STRIPE_PAYMENT_LINK in your hosting secrets to display a live subscription checkout button.")
         st.markdown("Planned premium controls: unlimited AI scans, advanced coaching history, wearable connectors, trainer access, family planning, and extended reports.")
@@ -1653,7 +1653,7 @@ def render_family_and_security(user: Any, ctx: dict[str, Any]) -> None:
 def render_elite_hub(user: Any, ctx: dict[str, Any]) -> None:
     inject_elite_css()
     ctx["hero"](
-        "NouriVolt Elite",
+        "NouriVanta Elite",
         "Personal intelligence for nutrition, training, and recovery",
         "Use adaptive coaching, verified food search, macro forecasting, program design, meal planning, voice logging, wearable imports, family tools, and account security from one workspace.",
     )
@@ -1661,7 +1661,7 @@ def render_elite_hub(user: Any, ctx: dict[str, Any]) -> None:
         """
         <div class="nv-elite-header">
             <div class="nv-label">Elite operating system</div>
-            <div style="font-size:1.2rem;font-weight:900;margin:.25rem 0">Your data stays in the existing NouriVolt account.</div>
+            <div style="font-size:1.2rem;font-weight:900;margin:.25rem 0">Your data stays in the existing NouriVanta account.</div>
             <div class="nv-meta">Every recommendation remains reviewable. Targets and records change only after you confirm an action.</div>
         </div>
         """,

@@ -1,4 +1,4 @@
-NOURIVOLT ELITE GITHUB UPLOAD CHECKLIST
+NOURIVANTA ELITE GITHUB UPLOAD CHECKLIST
 
 Upload these files and folders to the repository root:
 
@@ -33,7 +33,7 @@ Add private values under Streamlit App settings > Secrets:
 DATABASE_URL = "complete Neon PostgreSQL connection string"
 OPENAI_API_KEY = "OpenAI API key"
 FDC_API_KEY = "USDA FoodData Central API key"
-OPEN_FOOD_FACTS_USER_AGENT = "NouriVolt/3.0 (your-email@example.com)"
+OPEN_FOOD_FACTS_USER_AGENT = "NouriVanta/3.0 (your-email@example.com)"
 STRIPE_PAYMENT_LINK = "optional Stripe subscription payment link"
 
 Keep the existing DATABASE_URL to preserve deployed accounts and records.

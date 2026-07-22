@@ -59,8 +59,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
 
-APP_NAME = "NouriVolt"
-APP_TAGLINE = "Train with intent. Fuel with clarity."
+APP_NAME = "NouriVanta"
+APP_TAGLINE = "Fuel. Train. Recover. Advance."
 
 DEFAULT_TIMEZONE_NAME = os.getenv("APP_TIMEZONE", "America/Chicago")
 AUTO_TIMEZONE_LABEL = "Follow my device automatically"
@@ -427,7 +427,7 @@ class DailyCheckIn(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 
-# Elite tables are additive. Existing NouriVolt tables and records remain unchanged.
+# Elite tables are additive. Existing application tables and records remain unchanged.
 ELITE_MODELS = install_elite_models(Base)
 
 
@@ -1849,7 +1849,7 @@ def render_auth() -> None:
 
     with right:
         st.markdown("<div style='height:4vh'></div>", unsafe_allow_html=True)
-        st.markdown('<div class="nv-auth-heading">Welcome to NouriVolt</div>', unsafe_allow_html=True)
+        st.markdown('<div class="nv-auth-heading">Welcome to NouriVanta</div>', unsafe_allow_html=True)
         st.markdown('<div class="nv-auth-copy">Sign in to continue or create your private account.</div>', unsafe_allow_html=True)
 
         sign_in_col, create_col = st.columns(2, gap="small")
@@ -1938,7 +1938,7 @@ def render_auth() -> None:
 
 def sidebar(user: User) -> None:
     with st.sidebar:
-        st.markdown('<div class="nv-brand">Nouri<span>Volt</span></div>', unsafe_allow_html=True)
+        st.markdown('<div class="nv-brand">Nouri<span>Vanta</span></div>', unsafe_allow_html=True)
         st.markdown(f'<div class="nv-user">Signed in as {user.display_name or user.username}</div>', unsafe_allow_html=True)
         st.caption(f"Local time zone: {active_timezone_name()}")
 
@@ -1948,6 +1948,7 @@ def sidebar(user: User) -> None:
             "Goals": ("Progress & Goals", "Goals"),
             "Progress": ("Progress & Goals", "Measurements"),
             "NouriVolt Elite": ("Progress & Goals", "Adaptive Coach"),
+            "NouriVanta Elite": ("Progress & Goals", "Adaptive Coach"),
             "Profile": ("Settings", "Profile"),
             "Data & account": ("Settings", "Data & account"),
         }
@@ -2278,7 +2279,7 @@ def render_smart_scan(user: User) -> None:
                     "OpenAI API key",
                     type="password",
                     key="openai_api_key",
-                    help="The key stays in this browser session and is not written to the NouriVolt database.",
+                    help="The key stays in this browser session and is not written to the NouriVanta database.",
                 )
                 model_name = os.getenv("OPENAI_VISION_MODEL", "gpt-5.6")
                 status = "Connected" if st.session_state.openai_api_key else "Key required"
@@ -2665,7 +2666,7 @@ def render_readiness(user: User) -> None:
         <div class="nv-score-wrap">
             <div class="nv-score-ring" style="--score:{score}"><strong>{score}</strong></div>
             <div>
-                <div class="nv-label">NouriVolt readiness</div>
+                <div class="nv-label">NouriVanta readiness</div>
                 <div style="font-size:1.35rem;font-weight:850;margin:.25rem 0">{label}</div>
                 <div class="nv-meta">{guidance}</div>
             </div>
@@ -3019,7 +3020,7 @@ def render_data_account(user: User) -> None:
     hero("Data and account", "Control your information", "Export your records, change your password, or permanently delete your account.")
     st.subheader("Export")
     export_bytes = create_export(user)
-    st.download_button("Download account data", data=export_bytes, file_name=f"nourivolt_{user.username}_export.zip", mime="application/zip", width="stretch")
+    st.download_button("Download account data", data=export_bytes, file_name=f"nourivanta_{user.username}_export.zip", mime="application/zip", width="stretch")
 
     st.subheader("Change password")
     with st.form("password_form"):
@@ -3188,7 +3189,7 @@ def render_timezone_settings(user: User) -> None:
     hero(
         "Local time",
         "Use the correct day wherever you are",
-        "NouriVolt uses your device time zone automatically. You can save a specific time zone for this account when needed.",
+        "NouriVanta uses your device time zone automatically. You can save a specific time zone for this account when needed.",
     )
     detected = browser_timezone_name()
     effective_name = active_timezone_name()
@@ -3242,7 +3243,7 @@ def render_timezone_settings(user: User) -> None:
     if detected is None:
         st.info(
             "Automatic detection requires Streamlit 1.43 or newer. Until it is available, "
-            f"NouriVolt uses {effective_name}. You can choose a specific time zone above."
+            f"NouriVanta uses {effective_name}. You can choose a specific time zone above."
         )
 
 

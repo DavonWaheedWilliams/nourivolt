@@ -259,7 +259,7 @@ def parse_voice_command(transcript: str, api_key: str) -> dict[str, Any]:
         "text": {
             "format": {
                 "type": "json_schema",
-                "name": "nourivolt_voice_command",
+                "name": "nourivanta_voice_command",
                 "strict": True,
                 "schema": schema,
             }

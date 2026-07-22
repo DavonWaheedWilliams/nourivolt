@@ -1,4 +1,4 @@
-# NouriVolt Elite feature status
+# NouriVanta Elite feature status
 
 ## Working inside this Streamlit package
 

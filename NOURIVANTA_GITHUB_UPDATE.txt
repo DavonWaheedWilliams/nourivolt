@@ -1,0 +1,17 @@
+NOURIVANTA GITHUB UPDATE
+
+1. Back up your current GitHub repository and database connection details.
+2. Keep the same Neon DATABASE_URL in Streamlit Secrets.
+3. Upload or replace every file from this package in the repository root.
+4. Do not upload data/, any .db file, .env, or .streamlit/secrets.toml.
+5. Commit the changes.
+6. Reboot the Streamlit app.
+7. Confirm the browser title, login page, sidebar, reports, and exports show NouriVanta.
+8. Sign in with an existing account and confirm saved records remain.
+
+The local database filename remains data/nourivolt.db for compatibility. This is intentional.
+
+Optional changes:
+- Rename the GitHub repository to nourivanta-fitness-app.
+- Change the Streamlit app URL in App settings.
+Neither optional change affects the database or user records.

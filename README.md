@@ -1,6 +1,6 @@
-# NouriVolt Elite Suite
+# NouriVanta Elite Suite
 
-NouriVolt is a light, mobile-friendly Streamlit fitness operating system. It keeps the original account, nutrition, water, workout, measurement, goals, readiness, food-photo, barcode, export, and dashboard features. The Elite Suite adds adaptive coaching, verified food search, meal planning, program design, voice logging, wearable imports, family tools, and stronger account security.
+NouriVanta is a light, mobile-friendly Streamlit fitness operating system. It keeps the original account, nutrition, water, workout, measurement, goals, readiness, food-photo, barcode, export, and dashboard features. The Elite Suite adds adaptive coaching, verified food search, meal planning, program design, voice logging, wearable imports, family tools, and stronger account security.
 
 ## Required repository files
 
@@ -67,7 +67,7 @@ Add secrets in App settings > Secrets. Never commit them to GitHub.
 DATABASE_URL = "your Neon PostgreSQL connection string"
 OPENAI_API_KEY = "your OpenAI API key"
 FDC_API_KEY = "your USDA FoodData Central API key"
-OPEN_FOOD_FACTS_USER_AGENT = "NouriVolt/3.0 (your-email@example.com)"
+OPEN_FOOD_FACTS_USER_AGENT = "NouriVanta/3.0 (your-email@example.com)"
 STRIPE_PAYMENT_LINK = "your optional Stripe subscription payment link"
 ```
 
@@ -85,26 +85,3 @@ The Elite Suite creates new tables automatically. It does not rename or delete t
 ## Native mobile integrations
 
 The Wearable Bridge supports manual entry and CSV exports now. Direct Apple Health and Android Health Connect permission access requires a native iOS or Android companion application. Garmin and Fitbit live synchronization require their developer approval and OAuth credentials. The Streamlit app keeps connector-ready import workflows so these integrations can be added without changing the core database.
-
-## Consolidated navigation
-
-NouriVolt now uses six main navigation sections without removing features:
-
-- Dashboard
-- Nutrition: food and water, Smart Scan, Food Intelligence, Macro Forecast, Fuel Gap Map, saved meals, meal planning, grocery and pantry tools
-- Workouts: workout log, exercise sets, programs, progressive overload, personal records, recovery map, and rest tools
-- Readiness: daily check-ins, voice logging, wearable imports, and Recovery-to-Training Match
-- Progress & Goals: measurements, goals, trend forecasts, and Adaptive Coach reports
-- Settings: profile, per-user time zone, data exports, account management, family profiles, coach mode, security, and premium-ready controls
-
-
-## Per-user time zone
-
-NouriVolt detects each viewer's browser time zone through Streamlit and uses it for every current-date field and daily calculation. Each account also has a Settings > Time zone page with two choices:
-
-- Follow my device automatically
-- Use a specific IANA time zone
-
-A manual preference is saved in the database for that account. `APP_TIMEZONE` remains an optional fallback when browser detection is unavailable. The default fallback is `America/Chicago`.
-
-Automatic browser detection requires Streamlit 1.43 or newer. `requirements.txt` includes this minimum version.
