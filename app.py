@@ -2012,6 +2012,32 @@ def today_nutrition(session: Session, user: User, selected_date: date) -> dict[s
     return {"calories": float(row[0]), "protein": float(row[1]), "carbs": float(row[2]), "fat": float(row[3]), "water": float(water or 0)}
 
 
+def effective_workout_minutes(session: Session, workout: WorkoutSession) -> int:
+    """Return saved workout minutes, with a safe estimate for older program sessions.
+
+    Training Lab previously created sessions with a zero duration. When those
+    sessions already contain exercise sets, estimate 2.5 minutes per set so the
+    dashboard and history do not incorrectly report zero. New program sessions
+    save an estimated duration directly.
+    """
+    saved_minutes = int(workout.duration_min or 0)
+    if saved_minutes > 0:
+        return saved_minutes
+
+    set_count, set_minutes = session.execute(
+        select(
+            func.count(ExerciseSet.id),
+            func.coalesce(func.sum(ExerciseSet.duration_min), 0),
+        ).where(ExerciseSet.session_id == workout.id)
+    ).one()
+    logged_set_minutes = float(set_minutes or 0)
+    if logged_set_minutes > 0:
+        return max(1, int(round(logged_set_minutes)))
+    if int(set_count or 0) > 0:
+        return max(1, int(round(int(set_count) * 2.5)))
+    return 0
+
+
 def render_dashboard(user: User) -> None:
     hero("Today", f"Welcome back, {user.display_name or user.username}", "See your daily targets, recent training, and current progress in one place.")
     selected_date = st.date_input("Dashboard date", value=local_today(), format="MM/DD/YYYY", key="dashboard_date")
@@ -2025,18 +2051,7 @@ def render_dashboard(user: User) -> None:
             )
         ).all()
         workout_count = len(day_workouts)
-        workout_minutes = 0
-        for workout in day_workouts:
-            saved_minutes = int(workout.duration_min or 0)
-            if saved_minutes > 0:
-                workout_minutes += saved_minutes
-                continue
-            set_minutes = session.scalar(
-                select(func.coalesce(func.sum(ExerciseSet.duration_min), 0)).where(
-                    ExerciseSet.session_id == workout.id
-                )
-            ) or 0
-            workout_minutes += int(round(float(set_minutes)))
+        workout_minutes = sum(effective_workout_minutes(session, workout) for workout in day_workouts)
         latest_measurements = session.scalars(
             select(Measurement).where(Measurement.user_id == user.id).order_by(Measurement.measurement_date.desc()).limit(12)
         ).all()
@@ -2129,8 +2144,10 @@ def render_dashboard(user: User) -> None:
     with right:
         st.subheader("Recent workouts")
         if recent_workouts:
-            for workout in recent_workouts:
-                st.markdown(f"**{workout.workout_name}**  \n{workout.workout_date.strftime('%m/%d/%Y')} · {workout.category} · {workout.duration_min} min")
+            with SessionLocal() as session:
+                for workout in recent_workouts:
+                    shown_minutes = effective_workout_minutes(session, workout)
+                    st.markdown(f"**{workout.workout_name}**  \n{workout.workout_date.strftime('%m/%d/%Y')} · {workout.category} · {shown_minutes} min")
         else:
             st.markdown('<div class="nv-empty">Your recent workouts will appear here.</div>', unsafe_allow_html=True)
 
@@ -2855,7 +2872,9 @@ def render_workouts(user: User) -> None:
             st.markdown('<div class="nv-empty">No workouts saved yet.</div>', unsafe_allow_html=True)
         else:
             for workout in sessions[:30]:
-                with st.expander(f"{workout.workout_date.strftime('%m/%d/%Y')} · {workout.workout_name} · {workout.duration_min} min"):
+                with SessionLocal() as session:
+                    shown_minutes = effective_workout_minutes(session, workout)
+                with st.expander(f"{workout.workout_date.strftime('%m/%d/%Y')} · {workout.workout_name} · {shown_minutes} min"):
                     st.write(f"Category: {workout.category}")
                     if workout.notes:
                         st.write(workout.notes)

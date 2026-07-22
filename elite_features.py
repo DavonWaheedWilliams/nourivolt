@@ -449,11 +449,15 @@ def inject_elite_css() -> None:
         .nv-chip-elite { padding:.35rem .62rem; border-radius:999px; background:#F0EEFF; color:#5145CD; font-size:.78rem; font-weight:800; }
         .nv-gap-bar { height:12px; border-radius:999px; background:#E8EDF7; overflow:hidden; margin:.35rem 0 .75rem; }
         .nv-gap-bar span { display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,#6D5DFB,#13C4D4); }
+        .nv-suggestion-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem; margin:.7rem 0 1rem; }
+        .nv-suggestion-card { background:linear-gradient(135deg,rgba(255,255,255,.98),rgba(244,250,255,.94)); border:1px solid rgba(19,196,212,.20); border-radius:16px; padding:.9rem 1rem; box-shadow:0 8px 24px rgba(64,72,120,.07); }
+        .nv-suggestion-name { font-size:1rem; font-weight:900; color:#172033; margin-bottom:.35rem; }
+        .nv-suggestion-meta { color:#66738A; line-height:1.55; font-size:.9rem; }
         .nv-readiness-high { color:#16875D; }
         .nv-readiness-medium { color:#C97912; }
         .nv-readiness-low { color:#C23A4B; }
         @media(max-width:900px){ .nv-elite-grid{grid-template-columns:repeat(2,minmax(0,1fr));} }
-        @media(max-width:600px){ .nv-elite-grid{grid-template-columns:1fr;} }
+        @media(max-width:600px){ .nv-elite-grid,.nv-suggestion-grid{grid-template-columns:1fr;} }
         </style>
         """,
         unsafe_allow_html=True,
@@ -642,6 +646,13 @@ def _render_food_intelligence(user: Any, ctx: dict[str, Any]) -> None:
     models = ctx["models"]
     SessionLocal = ctx["SessionLocal"]
     FoodLog = ctx["FoodLog"]
+    hero = ctx.get("hero")
+    if hero:
+        hero(
+            "Nutrition Insights",
+            "Turn your food data into better decisions",
+            "Search verified foods, review labels, reuse saved meals, and forecast your remaining fuel needs.",
+        )
     search_tab, label_tab, favorites_tab, meals_tab, forecast_tab = st.tabs(["Verified search", "Nutrition label", "Favorites and recent", "Saved meals and copy", "Macro Forecast"])
 
     with search_tab:
@@ -913,8 +924,19 @@ def _render_food_intelligence(user: Any, ctx: dict[str, Any]) -> None:
         exclusions = [x.strip() for x in f"{pref.allergies},{pref.dislikes}".split(",") if x.strip()]
         suggestions = fuel_gap_suggestions(gaps["protein"], gaps["carbs"], gaps["fat"], gaps["calories"], exclusions)
         st.subheader("Practical next-food options")
-        for item in suggestions:
-            st.write(f"**{item['name']}** · {item['calories']} kcal · {item['protein_g']} g protein · {item['carbs_g']} g carbs · {item['fat_g']} g fat")
+        suggestion_cards = "".join(
+            f"""
+            <div class="nv-suggestion-card">
+                <div class="nv-suggestion-name">{_esc(item['name'])}</div>
+                <div class="nv-suggestion-meta">
+                    {item['calories']} kcal · {item['protein_g']} g protein<br>
+                    {item['carbs_g']} g carbs · {item['fat_g']} g fat
+                </div>
+            </div>
+            """
+            for item in suggestions
+        )
+        st.markdown(f'<div class="nv-suggestion-grid">{suggestion_cards}</div>', unsafe_allow_html=True)
 
 
 def _body_part_lookup(exercise_name: str, library: dict[str, list[str]]) -> str:
@@ -1098,18 +1120,30 @@ def _render_training_lab(user: Any, ctx: dict[str, Any]) -> None:
 
                 days = sorted({x.day_name for x in planned})
                 log_day = st.selectbox("Program day to start", days)
+                day_exercises = [x for x in planned if x.day_name == log_day]
+                estimated_minutes = max(
+                    15,
+                    int(round(sum(ex.sets * (45 + max(ex.rest_seconds, 0)) for ex in day_exercises) / 60 + 5)),
+                )
                 workout_date = st.date_input("Workout date", value=local_today(), format="MM/DD/YYYY", key="program_workout_date")
+                planned_duration = st.number_input(
+                    "Planned workout duration (minutes)",
+                    min_value=1,
+                    max_value=600,
+                    value=estimated_minutes,
+                    key=f"program_duration_{program.id}_{log_day}",
+                    help="This estimate is based on the planned sets and rest periods. Adjust it before creating the session.",
+                )
                 if st.button("Create workout session from this program day", type="primary", width="stretch"):
-                    day_exercises = [x for x in planned if x.day_name == log_day]
                     with SessionLocal() as session:
                         workout = WorkoutSession(
                             user_id=user.id,
                             workout_date=workout_date,
                             workout_name=f"{program.name} · {log_day}",
                             category=program.goal,
-                            duration_min=0,
+                            duration_min=int(planned_duration),
                             calories_burned=0,
-                            notes="Created from Elite Program Builder",
+                            notes="Created from NouriVanta Program Builder",
                         )
                         session.add(workout)
                         session.flush()
@@ -1124,7 +1158,8 @@ def _render_training_lab(user: Any, ctx: dict[str, Any]) -> None:
                                     completed=False,
                                 ))
                         session.commit()
-                    st.success("Workout session created with planned sets.")
+                    st.session_state["dashboard_date"] = workout_date
+                    st.success(f"Workout session created with planned sets and {int(planned_duration)} planned minute(s).")
 
         st.subheader("Rest timer")
         timer_seconds = st.number_input("Rest duration in seconds", min_value=10, max_value=600, value=90, step=5, key="elite_rest_seconds")
@@ -1851,30 +1886,37 @@ def _render_family_security(user: Any, ctx: dict[str, Any]) -> None:
 # Public rendering functions imported by app.py. Keeping these thin wrappers
 # preserves the internal helper structure while providing a stable module API.
 def render_adaptive_coach(user: Any, ctx: dict[str, Any]) -> None:
+    inject_elite_css()
     _render_coach(user, ctx)
 
 
 def render_elite_progress_center(user: Any, ctx: dict[str, Any]) -> None:
+    inject_elite_css()
     _render_progress_center(user, ctx)
 
 
 def render_family_and_security(user: Any, ctx: dict[str, Any]) -> None:
+    inject_elite_css()
     _render_family_security(user, ctx)
 
 
 def render_food_intelligence(user: Any, ctx: dict[str, Any]) -> None:
+    inject_elite_css()
     _render_food_intelligence(user, ctx)
 
 
 def render_meal_planner(user: Any, ctx: dict[str, Any]) -> None:
+    inject_elite_css()
     _render_meal_planner(user, ctx)
 
 
 def render_training_lab(user: Any, ctx: dict[str, Any]) -> None:
+    inject_elite_css()
     _render_training_lab(user, ctx)
 
 
 def render_voice_and_wearables(user: Any, ctx: dict[str, Any]) -> None:
+    inject_elite_css()
     _render_voice_wearables(user, ctx)
 
 def render_elite_hub(user: Any, ctx: dict[str, Any]) -> None:
