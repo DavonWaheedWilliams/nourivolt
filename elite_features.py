@@ -993,51 +993,53 @@ def _render_training_lab(user: Any, ctx: dict[str, Any]) -> None:
                     "Set style": x.set_style,
                 } for x in planned]), width="stretch", hide_index=True)
 
-                exercise_labels = {
-                    x.id: (
-                        f"{x.day_name} · {x.exercise_name} · "
-                        f"{x.sets} sets · {x.reps_min}-{x.reps_max} reps"
-                    )
-                    for x in planned
-                }
-                selected_exercise_ids = st.multiselect(
-                    "Exercises to delete",
-                    options=[x.id for x in planned],
-                    format_func=lambda exercise_id: exercise_labels.get(exercise_id, f"Exercise {exercise_id}"),
-                    key=f"delete_program_exercises_{program.id}",
-                    help="Select one or more exercises, then delete them from this program.",
-                )
-                if st.button(
-                    "Delete selected exercise(s)",
-                    key=f"delete_program_exercises_button_{program.id}",
-                    disabled=not selected_exercise_ids,
-                ):
-                    with SessionLocal() as session:
-                        session.execute(
-                            delete(models.WorkoutProgramExercise).where(
-                                models.WorkoutProgramExercise.program_id == program.id,
-                                models.WorkoutProgramExercise.id.in_(selected_exercise_ids),
-                            )
+                st.markdown("### Manage program exercises")
+                st.caption("Delete an exercise directly from the program. The remaining exercises will be reordered automatically.")
+
+                for planned_exercise in planned:
+                    row_left, row_right = st.columns([5, 1])
+                    with row_left:
+                        st.markdown(f"**{planned_exercise.day_name} · {planned_exercise.exercise_name}**")
+                        details = (
+                            f"{planned_exercise.body_part} · {planned_exercise.sets} sets · "
+                            f"{planned_exercise.reps_min}-{planned_exercise.reps_max} reps · "
+                            f"{planned_exercise.target_weight_lb:g} lb · "
+                            f"{planned_exercise.rest_seconds} sec rest"
                         )
-                        remaining = session.scalars(
-                            select(models.WorkoutProgramExercise)
-                            .where(models.WorkoutProgramExercise.program_id == program.id)
-                            .order_by(
-                                models.WorkoutProgramExercise.day_name,
-                                models.WorkoutProgramExercise.order_index,
-                                models.WorkoutProgramExercise.id,
+                        st.caption(details)
+                    with row_right:
+                        delete_clicked = st.button(
+                            "Delete",
+                            key=f"delete_program_exercise_{program.id}_{planned_exercise.id}",
+                            width="stretch",
+                        )
+
+                    if delete_clicked:
+                        with SessionLocal() as session:
+                            session.execute(
+                                delete(models.WorkoutProgramExercise).where(
+                                    models.WorkoutProgramExercise.program_id == program.id,
+                                    models.WorkoutProgramExercise.id == planned_exercise.id,
+                                )
                             )
-                        ).all()
-                        order_by_day: dict[str, int] = {}
-                        for exercise in remaining:
-                            order_by_day[exercise.day_name] = order_by_day.get(exercise.day_name, 0) + 1
-                            exercise.order_index = order_by_day[exercise.day_name]
-                        session.commit()
-                    st.success(
-                        f"Deleted {len(selected_exercise_ids)} exercise"
-                        f"{'s' if len(selected_exercise_ids) != 1 else ''} from the program."
-                    )
-                    st.rerun()
+                            remaining = session.scalars(
+                                select(models.WorkoutProgramExercise)
+                                .where(models.WorkoutProgramExercise.program_id == program.id)
+                                .order_by(
+                                    models.WorkoutProgramExercise.day_name,
+                                    models.WorkoutProgramExercise.order_index,
+                                    models.WorkoutProgramExercise.id,
+                                )
+                            ).all()
+                            order_by_day: dict[str, int] = {}
+                            for exercise in remaining:
+                                order_by_day[exercise.day_name] = order_by_day.get(exercise.day_name, 0) + 1
+                                exercise.order_index = order_by_day[exercise.day_name]
+                            session.commit()
+                        st.success(f"Deleted {planned_exercise.exercise_name} from the program.")
+                        st.rerun()
+
+                    st.divider()
 
                 days = sorted({x.day_name for x in planned})
                 log_day = st.selectbox("Program day to start", days)
