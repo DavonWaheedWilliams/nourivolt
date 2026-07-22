@@ -860,7 +860,13 @@ def _render_training_lab(user: Any, ctx: dict[str, Any]) -> None:
     WorkoutSession = ctx["WorkoutSession"]
     ExerciseSet = ctx["ExerciseSet"]
     library = ctx["EXERCISE_LIBRARY"]
-    builder_tab, overload_tab, recovery_tab = st.tabs(["Program builder", "Progressive overload and PRs", "Recovery map"])
+    hero = ctx["hero"]
+    hero(
+        "Training Lab",
+        "Build smarter training plans",
+        "Create structured programs, plan progressive overload, track personal records, and manage muscle recovery.",
+    )
+    builder_tab, overload_tab, recovery_tab = st.tabs(["Program Builder", "Progressive Overload & PRs", "Recovery Map"])
 
     with builder_tab:
         with st.form("elite_program_create"):

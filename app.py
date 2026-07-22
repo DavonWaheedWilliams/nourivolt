@@ -983,6 +983,57 @@ def inject_css() -> None:
         }
         [data-testid="stTabs"] button[role="tab"][aria-selected="true"] p { color: #FFFFFF !important; }
         [data-testid="stTabs"] [data-baseweb="tab-highlight"] { display: none !important; }
+        /* Main-page radio groups render as clean segmented controls. */
+        [data-testid="stMain"] [data-testid="stRadio"] {
+            margin: .2rem 0 1rem !important;
+        }
+        [data-testid="stMain"] [data-testid="stRadio"] > div[role="radiogroup"] {
+            display: inline-flex !important;
+            flex-wrap: wrap !important;
+            gap: .35rem !important;
+            padding: .35rem !important;
+            border-radius: 15px !important;
+            background: linear-gradient(90deg, rgba(241,238,255,.94), rgba(233,252,255,.92), rgba(255,245,232,.86)) !important;
+            border: 1px solid rgba(109,93,251,.16) !important;
+            box-shadow: 0 8px 24px rgba(64,72,120,.06) !important;
+        }
+        [data-testid="stMain"] [data-testid="stRadio"] label {
+            min-height: 2.55rem !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: .62rem 1rem !important;
+            margin: 0 !important;
+            border-radius: 11px !important;
+            border: 1px solid transparent !important;
+            color: #526078 !important;
+            font-weight: 800 !important;
+            cursor: pointer !important;
+            transition: background .18s ease, color .18s ease, box-shadow .18s ease, transform .18s ease !important;
+        }
+        [data-testid="stMain"] [data-testid="stRadio"] label:hover {
+            background: rgba(255,255,255,.76) !important;
+            color: #4438A8 !important;
+            transform: translateY(-1px);
+        }
+        [data-testid="stMain"] [data-testid="stRadio"] label > div:first-child {
+            display: none !important;
+        }
+        [data-testid="stMain"] [data-testid="stRadio"] label p {
+            margin: 0 !important;
+            color: inherit !important;
+            font-weight: inherit !important;
+            line-height: 1.2 !important;
+        }
+        [data-testid="stMain"] [data-testid="stRadio"] label:has(input:checked) {
+            background: linear-gradient(90deg, var(--violet), var(--blue), var(--cyan)) !important;
+            color: #FFFFFF !important;
+            border-color: transparent !important;
+            box-shadow: 0 7px 18px rgba(79,70,229,.22) !important;
+        }
+        [data-testid="stMain"] [data-testid="stRadio"] label:has(input:checked) p {
+            color: #FFFFFF !important;
+        }
         [data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) {
             background: linear-gradient(90deg, rgba(109,93,251,.16), rgba(19,196,212,.14));
             border: 1px solid rgba(109,93,251,.16);
@@ -2625,6 +2676,7 @@ def render_workouts_center(user: User) -> None:
         options,
         index=options.index(current),
         horizontal=True,
+        label_visibility="collapsed",
         key="workouts_section_selector",
     )
     st.session_state.workouts_subpage = selected
