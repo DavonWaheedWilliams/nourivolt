@@ -3094,8 +3094,10 @@ def elite_context() -> dict[str, Any]:
 
 def render_nutrition_center(user: User) -> None:
     """Keep all food, scanning, forecasting, and meal-planning tools together."""
-    options = ["Food & water", "Smart Scan", "Food Intelligence", "Meal Planner"]
+    options = ["Food & water", "Smart Scan", "Nutrition Insights", "Meal Planner"]
     current = st.session_state.get("nutrition_subpage", options[0])
+    if current == "Food Intelligence":
+        current = "Nutrition Insights"
     if current not in options:
         current = options[0]
     selected = st.radio(
@@ -3109,7 +3111,7 @@ def render_nutrition_center(user: User) -> None:
     st.session_state.nutrition_subpage = selected
     if selected == "Smart Scan":
         render_smart_scan(user)
-    elif selected == "Food Intelligence":
+    elif selected == "Nutrition Insights":
         render_food_intelligence(user, elite_context())
     elif selected == "Meal Planner":
         render_meal_planner(user, elite_context())

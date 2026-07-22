@@ -1669,7 +1669,7 @@ def render_elite_hub(user: Any, ctx: dict[str, Any]) -> None:
     )
     tabs = st.tabs([
         "Adaptive Coach",
-        "Food Intelligence",
+        "Nutrition Insights",
         "Training Lab",
         "Meal Planner",
         "Progress Center",
