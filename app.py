@@ -2012,32 +2012,6 @@ def today_nutrition(session: Session, user: User, selected_date: date) -> dict[s
     return {"calories": float(row[0]), "protein": float(row[1]), "carbs": float(row[2]), "fat": float(row[3]), "water": float(water or 0)}
 
 
-def effective_workout_minutes(session: Session, workout: WorkoutSession) -> int:
-    """Return saved workout minutes, with a safe estimate for older program sessions.
-
-    Training Lab previously created sessions with a zero duration. When those
-    sessions already contain exercise sets, estimate 2.5 minutes per set so the
-    dashboard and history do not incorrectly report zero. New program sessions
-    save an estimated duration directly.
-    """
-    saved_minutes = int(workout.duration_min or 0)
-    if saved_minutes > 0:
-        return saved_minutes
-
-    set_count, set_minutes = session.execute(
-        select(
-            func.count(ExerciseSet.id),
-            func.coalesce(func.sum(ExerciseSet.duration_min), 0),
-        ).where(ExerciseSet.session_id == workout.id)
-    ).one()
-    logged_set_minutes = float(set_minutes or 0)
-    if logged_set_minutes > 0:
-        return max(1, int(round(logged_set_minutes)))
-    if int(set_count or 0) > 0:
-        return max(1, int(round(int(set_count) * 2.5)))
-    return 0
-
-
 def render_dashboard(user: User) -> None:
     hero("Today", f"Welcome back, {user.display_name or user.username}", "See your daily targets, recent training, and current progress in one place.")
     selected_date = st.date_input("Dashboard date", value=local_today(), format="MM/DD/YYYY", key="dashboard_date")
@@ -2051,7 +2025,18 @@ def render_dashboard(user: User) -> None:
             )
         ).all()
         workout_count = len(day_workouts)
-        workout_minutes = sum(effective_workout_minutes(session, workout) for workout in day_workouts)
+        workout_minutes = 0
+        for workout in day_workouts:
+            saved_minutes = int(workout.duration_min or 0)
+            if saved_minutes > 0:
+                workout_minutes += saved_minutes
+                continue
+            set_minutes = session.scalar(
+                select(func.coalesce(func.sum(ExerciseSet.duration_min), 0)).where(
+                    ExerciseSet.session_id == workout.id
+                )
+            ) or 0
+            workout_minutes += int(round(float(set_minutes)))
         latest_measurements = session.scalars(
             select(Measurement).where(Measurement.user_id == user.id).order_by(Measurement.measurement_date.desc()).limit(12)
         ).all()
@@ -2068,6 +2053,7 @@ def render_dashboard(user: User) -> None:
     ready_score = readiness_score(daily_checkin, totals, user)
     ready_title, ready_copy = readiness_label(ready_score)
 
+    # Keep the four core nutrition targets together at the top.
     r1, r2, r3, r4 = st.columns(4)
     with r1:
         circular_metric_card(
@@ -2089,45 +2075,46 @@ def render_dashboard(user: User) -> None:
         )
     with r3:
         circular_metric_card(
-            "Water",
-            f"{ml_to_fl_oz(totals['water']):.0f}",
-            "fl oz",
-            f"of {ml_to_fl_oz(user.water_target_ml):.0f} fl oz",
-            totals["water"] / max(user.water_target_ml, 1) * 100,
-            "#2F80ED",
+            "Carbohydrates",
+            f"{totals['carbs']:.0f}",
+            "grams",
+            f"of {user.carb_target} g",
+            totals["carbs"] / max(user.carb_target, 1) * 100,
+            "#F2994A",
         )
     with r4:
         circular_metric_card(
-            "Readiness",
-            f"{ready_score}",
-            "score",
-            ready_title,
-            ready_score,
-            "#27AE60" if ready_score >= 80 else "#16B8C4" if ready_score >= 60 else "#F2994A" if ready_score >= 40 else "#EB5757",
+            "Fat",
+            f"{totals['fat']:.0f}",
+            "grams",
+            f"of {user.fat_target} g",
+            totals["fat"] / max(user.fat_target, 1) * 100,
+            "#D65DB1",
         )
 
     st.subheader("Daily balance")
     b1, b2, b3, b4 = st.columns(4)
     with b1:
-        metric_card("Training", f"{workout_minutes} min", f"{workout_count} session{'s' if workout_count != 1 else ''}")
-    with b2:
         metric_card(
-            "Carbohydrates",
-            f"{totals['carbs']:.0f} g",
-            f"of {user.carb_target} g",
-            totals["carbs"] / max(user.carb_target, 1) * 100,
-            accent="#F2994A",
-            accent_end="#F2C94C",
+            "Water",
+            f"{ml_to_fl_oz(totals['water']):.0f} fl oz",
+            f"of {ml_to_fl_oz(user.water_target_ml):.0f} fl oz",
+            totals["water"] / max(user.water_target_ml, 1) * 100,
+            accent="#2F80ED",
+            accent_end="#56CCF2",
+        )
+    with b2:
+        readiness_accent = "#27AE60" if ready_score >= 80 else "#16B8C4" if ready_score >= 60 else "#F2994A" if ready_score >= 40 else "#EB5757"
+        metric_card(
+            "Readiness",
+            f"{ready_score}",
+            ready_title,
+            ready_score,
+            accent=readiness_accent,
+            accent_end=readiness_accent,
         )
     with b3:
-        metric_card(
-            "Fat",
-            f"{totals['fat']:.0f} g",
-            f"of {user.fat_target} g",
-            totals["fat"] / max(user.fat_target, 1) * 100,
-            accent="#D65DB1",
-            accent_end="#845EC2",
-        )
+        metric_card("Training", f"{workout_minutes} min", f"{workout_count} session{'s' if workout_count != 1 else ''}")
     with b4:
         remaining = max(0, user.calorie_target - totals["calories"])
         metric_card("Calories remaining", f"{remaining:.0f}", "Based on your daily target")
@@ -2144,10 +2131,8 @@ def render_dashboard(user: User) -> None:
     with right:
         st.subheader("Recent workouts")
         if recent_workouts:
-            with SessionLocal() as session:
-                for workout in recent_workouts:
-                    shown_minutes = effective_workout_minutes(session, workout)
-                    st.markdown(f"**{workout.workout_name}**  \n{workout.workout_date.strftime('%m/%d/%Y')} · {workout.category} · {shown_minutes} min")
+            for workout in recent_workouts:
+                st.markdown(f"**{workout.workout_name}**  \n{workout.workout_date.strftime('%m/%d/%Y')} · {workout.category} · {workout.duration_min} min")
         else:
             st.markdown('<div class="nv-empty">Your recent workouts will appear here.</div>', unsafe_allow_html=True)
 
@@ -2872,39 +2857,15 @@ def render_workouts(user: User) -> None:
             st.markdown('<div class="nv-empty">No workouts saved yet.</div>', unsafe_allow_html=True)
         else:
             for workout in sessions[:30]:
-                with SessionLocal() as session:
-                    shown_minutes = effective_workout_minutes(session, workout)
-                with st.expander(f"{workout.workout_date.strftime('%m/%d/%Y')} · {workout.workout_name} · {shown_minutes} min"):
+                with st.expander(f"{workout.workout_date.strftime('%m/%d/%Y')} · {workout.workout_name} · {workout.duration_min} min"):
                     st.write(f"Category: {workout.category}")
                     if workout.notes:
                         st.write(workout.notes)
                     with SessionLocal() as session:
-                        sets = session.scalars(
-                            select(ExerciseSet)
-                            .where(ExerciseSet.session_id == workout.id)
-                            .order_by(ExerciseSet.id)
-                        ).all()
+                        sets = session.scalars(select(ExerciseSet).where(ExerciseSet.session_id == workout.id).order_by(ExerciseSet.exercise_name, ExerciseSet.set_number)).all()
                     if sets:
-                        exercise_groups: dict[str, list[ExerciseSet]] = {}
-                        exercise_labels: dict[str, str] = {}
-                        for exercise_set in sets:
-                            exercise_key = exercise_set.exercise_name.strip().casefold()
-                            exercise_groups.setdefault(exercise_key, []).append(exercise_set)
-                            exercise_labels.setdefault(exercise_key, exercise_set.exercise_name)
-
-                        for exercise_key, exercise_sets in exercise_groups.items():
-                            st.markdown(f"#### {html.escape(exercise_labels[exercise_key])}")
-                            exercise_df = pd.DataFrame([
-                                {
-                                    "Set": display_set_number,
-                                    "Reps": exercise_set.reps,
-                                    "Weight (lb)": exercise_set.weight_lb,
-                                    "Distance (mi)": exercise_set.distance_miles,
-                                    "Minutes": exercise_set.duration_min,
-                                }
-                                for display_set_number, exercise_set in enumerate(exercise_sets, start=1)
-                            ])
-                            st.dataframe(exercise_df, width="stretch", hide_index=True)
+                        df = pd.DataFrame([{"Exercise": x.exercise_name, "Set": x.set_number, "Reps": x.reps, "Weight (lb)": x.weight_lb, "Distance (mi)": x.distance_miles, "Minutes": x.duration_min} for x in sets])
+                        st.dataframe(df, width="stretch", hide_index=True)
                     else:
                         st.caption("No detailed exercise sets saved.")
                     if st.button("Delete workout", key=f"delete_workout_{workout.id}"):
