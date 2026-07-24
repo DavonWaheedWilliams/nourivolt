@@ -2053,7 +2053,6 @@ def render_dashboard(user: User) -> None:
     ready_score = readiness_score(daily_checkin, totals, user)
     ready_title, ready_copy = readiness_label(ready_score)
 
-    # Keep the four core nutrition targets together at the top.
     r1, r2, r3, r4 = st.columns(4)
     with r1:
         circular_metric_card(
@@ -2075,46 +2074,45 @@ def render_dashboard(user: User) -> None:
         )
     with r3:
         circular_metric_card(
-            "Carbohydrates",
-            f"{totals['carbs']:.0f}",
-            "grams",
-            f"of {user.carb_target} g",
-            totals["carbs"] / max(user.carb_target, 1) * 100,
-            "#F2994A",
+            "Water",
+            f"{ml_to_fl_oz(totals['water']):.0f}",
+            "fl oz",
+            f"of {ml_to_fl_oz(user.water_target_ml):.0f} fl oz",
+            totals["water"] / max(user.water_target_ml, 1) * 100,
+            "#2F80ED",
         )
     with r4:
         circular_metric_card(
-            "Fat",
-            f"{totals['fat']:.0f}",
-            "grams",
-            f"of {user.fat_target} g",
-            totals["fat"] / max(user.fat_target, 1) * 100,
-            "#D65DB1",
+            "Readiness",
+            f"{ready_score}",
+            "score",
+            ready_title,
+            ready_score,
+            "#27AE60" if ready_score >= 80 else "#16B8C4" if ready_score >= 60 else "#F2994A" if ready_score >= 40 else "#EB5757",
         )
 
     st.subheader("Daily balance")
     b1, b2, b3, b4 = st.columns(4)
     with b1:
-        metric_card(
-            "Water",
-            f"{ml_to_fl_oz(totals['water']):.0f} fl oz",
-            f"of {ml_to_fl_oz(user.water_target_ml):.0f} fl oz",
-            totals["water"] / max(user.water_target_ml, 1) * 100,
-            accent="#2F80ED",
-            accent_end="#56CCF2",
-        )
+        metric_card("Training", f"{workout_minutes} min", f"{workout_count} session{'s' if workout_count != 1 else ''}")
     with b2:
-        readiness_accent = "#27AE60" if ready_score >= 80 else "#16B8C4" if ready_score >= 60 else "#F2994A" if ready_score >= 40 else "#EB5757"
         metric_card(
-            "Readiness",
-            f"{ready_score}",
-            ready_title,
-            ready_score,
-            accent=readiness_accent,
-            accent_end=readiness_accent,
+            "Carbohydrates",
+            f"{totals['carbs']:.0f} g",
+            f"of {user.carb_target} g",
+            totals["carbs"] / max(user.carb_target, 1) * 100,
+            accent="#F2994A",
+            accent_end="#F2C94C",
         )
     with b3:
-        metric_card("Training", f"{workout_minutes} min", f"{workout_count} session{'s' if workout_count != 1 else ''}")
+        metric_card(
+            "Fat",
+            f"{totals['fat']:.0f} g",
+            f"of {user.fat_target} g",
+            totals["fat"] / max(user.fat_target, 1) * 100,
+            accent="#D65DB1",
+            accent_end="#845EC2",
+        )
     with b4:
         remaining = max(0, user.calorie_target - totals["calories"])
         metric_card("Calories remaining", f"{remaining:.0f}", "Based on your daily target")
@@ -2409,6 +2407,20 @@ def render_smart_scan(user: User) -> None:
                 try:
                     with st.spinner("Searching packaged-food nutrition..."):
                         st.session_state.barcode_product = cached_product_lookup(manual_barcode)
+                    for state_key in (
+                        "barcode_manual_calories",
+                        "barcode_manual_protein",
+                        "barcode_manual_carbs",
+                        "barcode_manual_fat",
+                        "barcode_manual_fiber",
+                        "barcode_total_calories",
+                        "barcode_total_protein",
+                        "barcode_total_carbs",
+                        "barcode_total_fat",
+                        "barcode_total_fiber",
+                        "barcode_total_signature",
+                    ):
+                        st.session_state.pop(state_key, None)
                     st.success("Product found. Review the serving and macros.")
                 except VisionServiceError as exc:
                     st.error(str(exc))
@@ -2437,16 +2449,76 @@ def render_smart_scan(user: User) -> None:
 
                 basis = st.radio(
                     "Nutrition basis",
-                    ["Database serving", "100 g", "Custom grams"],
+                    ["Database serving", "Manual per serving", "100 g", "Custom grams"],
                     horizontal=True,
                     key="barcode_basis",
                 )
                 custom_grams = 100.0
                 if basis == "Custom grams":
-                    custom_grams = st.number_input("Portion grams", min_value=1.0, value=100.0, step=5.0)
-                servings = st.number_input("Number of servings", min_value=0.1, value=1.0, step=0.25)
+                    custom_grams = st.number_input(
+                        "Portion grams",
+                        min_value=1.0,
+                        value=100.0,
+                        step=5.0,
+                        key="barcode_custom_grams",
+                    )
+                servings = st.number_input(
+                    "Number of servings",
+                    min_value=0.1,
+                    value=1.0,
+                    step=0.25,
+                    key="barcode_servings",
+                )
 
-                if basis == "Database serving":
+                if basis == "Manual per serving":
+                    st.caption("Enter the nutrition-label values for one serving. The totals below update automatically.")
+                    m1, m2, m3 = st.columns(3)
+                    manual_calories = m1.number_input(
+                        "Calories per serving",
+                        min_value=0.0,
+                        value=0.0,
+                        step=5.0,
+                        key="barcode_manual_calories",
+                    )
+                    manual_protein = m2.number_input(
+                        "Protein per serving (g)",
+                        min_value=0.0,
+                        value=0.0,
+                        step=1.0,
+                        key="barcode_manual_protein",
+                    )
+                    manual_carbs = m3.number_input(
+                        "Carbs per serving (g)",
+                        min_value=0.0,
+                        value=0.0,
+                        step=1.0,
+                        key="barcode_manual_carbs",
+                    )
+                    m4, m5 = st.columns(2)
+                    manual_fat = m4.number_input(
+                        "Fat per serving (g)",
+                        min_value=0.0,
+                        value=0.0,
+                        step=1.0,
+                        key="barcode_manual_fat",
+                    )
+                    manual_fiber = m5.number_input(
+                        "Fiber per serving (g)",
+                        min_value=0.0,
+                        value=0.0,
+                        step=1.0,
+                        key="barcode_manual_fiber",
+                    )
+                    source_values = {
+                        "calories": manual_calories,
+                        "protein_g": manual_protein,
+                        "carbs_g": manual_carbs,
+                        "fat_g": manual_fat,
+                        "fiber_g": manual_fiber,
+                    }
+                    serving_text = product.get("serving_size") or "1 serving"
+                    factor = servings
+                elif basis == "Database serving":
                     source_values = product.get("per_serving") or {}
                     serving_text = product.get("serving_size") or "1 serving"
                     if not any(value is not None for value in source_values.values()):
@@ -2470,9 +2542,32 @@ def render_smart_scan(user: User) -> None:
                     "carbs_g": _safe_float(source_values.get("carbs_g")) * factor,
                     "fat_g": _safe_float(source_values.get("fat_g")) * factor,
                     "fiber_g": _safe_float(source_values.get("fiber_g")) * factor,
-                    "confidence": .98,
+                    "confidence": .98 if basis != "Manual per serving" else 1.0,
                 }
-                render_macro_result(barcode_result, "Product database result")
+
+                total_signature = (
+                    str(product.get("barcode") or ""),
+                    basis,
+                    round(float(servings), 4),
+                    round(float(custom_grams), 4),
+                    round(float(barcode_result["calories"]), 4),
+                    round(float(barcode_result["protein_g"]), 4),
+                    round(float(barcode_result["carbs_g"]), 4),
+                    round(float(barcode_result["fat_g"]), 4),
+                    round(float(barcode_result["fiber_g"]), 4),
+                )
+                if st.session_state.get("barcode_total_signature") != total_signature:
+                    st.session_state.barcode_total_calories = float(barcode_result["calories"])
+                    st.session_state.barcode_total_protein = float(barcode_result["protein_g"])
+                    st.session_state.barcode_total_carbs = float(barcode_result["carbs_g"])
+                    st.session_state.barcode_total_fat = float(barcode_result["fat_g"])
+                    st.session_state.barcode_total_fiber = float(barcode_result["fiber_g"])
+                    st.session_state.barcode_total_signature = total_signature
+
+                render_macro_result(
+                    barcode_result,
+                    "Calculated nutrition total" if basis == "Manual per serving" else "Product database result",
+                )
 
                 with st.form("save_barcode_result"):
                     log_date = st.date_input("Diary date", value=local_today(), format="MM/DD/YYYY", key="barcode_log_date")
@@ -2480,12 +2575,37 @@ def render_smart_scan(user: User) -> None:
                     food_name = st.text_input("Food name", value=str(product.get("product_name") or "Scanned product"))
                     serving = st.text_input("Serving", value=f"{servings:g} × {serving_text}")
                     c1, c2, c3 = st.columns(3)
-                    calories = c1.number_input("Calories", min_value=0.0, value=barcode_result["calories"], step=10.0)
-                    protein = c2.number_input("Protein (g)", min_value=0.0, value=barcode_result["protein_g"], step=1.0)
-                    carbs = c3.number_input("Carbs (g)", min_value=0.0, value=barcode_result["carbs_g"], step=1.0)
+                    calories = c1.number_input(
+                        "Calories",
+                        min_value=0.0,
+                        step=10.0,
+                        key="barcode_total_calories",
+                    )
+                    protein = c2.number_input(
+                        "Protein (g)",
+                        min_value=0.0,
+                        step=1.0,
+                        key="barcode_total_protein",
+                    )
+                    carbs = c3.number_input(
+                        "Carbs (g)",
+                        min_value=0.0,
+                        step=1.0,
+                        key="barcode_total_carbs",
+                    )
                     c4, c5 = st.columns(2)
-                    fat = c4.number_input("Fat (g)", min_value=0.0, value=barcode_result["fat_g"], step=1.0)
-                    fiber = c5.number_input("Fiber (g)", min_value=0.0, value=barcode_result["fiber_g"], step=1.0)
+                    fat = c4.number_input(
+                        "Fat (g)",
+                        min_value=0.0,
+                        step=1.0,
+                        key="barcode_total_fat",
+                    )
+                    fiber = c5.number_input(
+                        "Fiber (g)",
+                        min_value=0.0,
+                        step=1.0,
+                        key="barcode_total_fiber",
+                    )
                     notes = st.text_area(
                         "Notes",
                         value=f"Barcode {product.get('barcode', '')}. Nutri-Score {grade}. NOVA {nova}.",
@@ -2572,7 +2692,7 @@ def render_smart_scan(user: User) -> None:
             history_df = pd.DataFrame(
                 [
                     {
-                        "Date": item.scan_date.strftime("%m/%d/%Y"),
+                        "Date": item.scan_date,
                         "Source": item.source,
                         "Food": item.food_name,
                         "Serving": item.serving,
@@ -2586,34 +2706,6 @@ def render_smart_scan(user: User) -> None:
                 ]
             )
             st.dataframe(history_df, width="stretch", hide_index=True)
-
-            scan_options = {item.id: item for item in scans}
-            selected_scan_id = st.selectbox(
-                "Delete a scan-history item",
-                options=[None, *scan_options.keys()],
-                format_func=lambda value: (
-                    "Select a saved scan"
-                    if value is None
-                    else f"{scan_options[value].scan_date.strftime('%m/%d/%Y')} · "
-                    f"{scan_options[value].source} · {scan_options[value].food_name}"
-                ),
-                key="scan_history_delete_choice",
-            )
-            if st.button(
-                "Delete selected scan",
-                disabled=selected_scan_id is None,
-                key="delete_selected_scan_history",
-            ):
-                with SessionLocal() as session:
-                    session.execute(
-                        delete(SmartScan).where(
-                            SmartScan.id == selected_scan_id,
-                            SmartScan.user_id == user.id,
-                        )
-                    )
-                    session.commit()
-                st.success("Scan-history item deleted.")
-                st.rerun()
         else:
             st.markdown('<div class="nv-empty">Food-photo and barcode scans will appear here after you save them.</div>', unsafe_allow_html=True)
 
@@ -2894,88 +2986,6 @@ def render_workouts(user: User) -> None:
                     if sets:
                         df = pd.DataFrame([{"Exercise": x.exercise_name, "Set": x.set_number, "Reps": x.reps, "Weight (lb)": x.weight_lb, "Distance (mi)": x.distance_miles, "Minutes": x.duration_min} for x in sets])
                         st.dataframe(df, width="stretch", hide_index=True)
-
-                        set_options = {item.id: item for item in sets}
-                        selected_set_id = st.selectbox(
-                            "Exercise set to edit",
-                            options=list(set_options),
-                            format_func=lambda value: (
-                                f"{set_options[value].exercise_name} · Set {set_options[value].set_number} · "
-                                f"{set_options[value].reps} reps · {set_options[value].weight_lb:g} lb"
-                            ),
-                            key=f"history_set_choice_{workout.id}",
-                        )
-                        selected_set = set_options[selected_set_id]
-                        with st.form(f"edit_history_set_form_{workout.id}_{selected_set_id}"):
-                            e1, e2, e3 = st.columns(3)
-                            edited_set_number = e1.number_input(
-                                "Set",
-                                min_value=1,
-                                max_value=100,
-                                value=int(selected_set.set_number),
-                                step=1,
-                                key=f"edit_set_number_{workout.id}_{selected_set_id}",
-                            )
-                            edited_reps = e2.number_input(
-                                "Reps",
-                                min_value=0,
-                                max_value=1000,
-                                value=int(selected_set.reps),
-                                step=1,
-                                key=f"edit_reps_{workout.id}_{selected_set_id}",
-                            )
-                            edited_weight = e3.number_input(
-                                "Weight (lb)",
-                                min_value=0.0,
-                                max_value=3000.0,
-                                value=float(selected_set.weight_lb),
-                                step=2.5,
-                                key=f"edit_weight_{workout.id}_{selected_set_id}",
-                            )
-                            e4, e5 = st.columns(2)
-                            edited_distance = e4.number_input(
-                                "Distance (miles)",
-                                min_value=0.0,
-                                max_value=500.0,
-                                value=float(selected_set.distance_miles),
-                                step=0.1,
-                                key=f"edit_distance_{workout.id}_{selected_set_id}",
-                            )
-                            edited_minutes = e5.number_input(
-                                "Minutes",
-                                min_value=0.0,
-                                max_value=600.0,
-                                value=float(selected_set.duration_min),
-                                step=0.5,
-                                key=f"edit_minutes_{workout.id}_{selected_set_id}",
-                            )
-                            save_set_changes = st.form_submit_button(
-                                "Save set changes",
-                                type="primary",
-                                width="stretch",
-                            )
-                        if save_set_changes:
-                            with SessionLocal() as session:
-                                owned_set = session.scalar(
-                                    select(ExerciseSet)
-                                    .join(WorkoutSession, ExerciseSet.session_id == WorkoutSession.id)
-                                    .where(
-                                        ExerciseSet.id == selected_set_id,
-                                        WorkoutSession.id == workout.id,
-                                        WorkoutSession.user_id == user.id,
-                                    )
-                                )
-                                if owned_set is None:
-                                    st.error("This exercise set could not be found.")
-                                else:
-                                    owned_set.set_number = int(edited_set_number)
-                                    owned_set.reps = int(edited_reps)
-                                    owned_set.weight_lb = float(edited_weight)
-                                    owned_set.distance_miles = float(edited_distance)
-                                    owned_set.duration_min = float(edited_minutes)
-                                    session.commit()
-                                    st.success("Exercise set updated.")
-                            st.rerun()
                     else:
                         st.caption("No detailed exercise sets saved.")
                     if st.button("Delete workout", key=f"delete_workout_{workout.id}"):
