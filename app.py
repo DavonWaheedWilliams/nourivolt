@@ -2572,7 +2572,7 @@ def render_smart_scan(user: User) -> None:
             history_df = pd.DataFrame(
                 [
                     {
-                        "Date": item.scan_date,
+                        "Date": item.scan_date.strftime("%m/%d/%Y"),
                         "Source": item.source,
                         "Food": item.food_name,
                         "Serving": item.serving,
@@ -2586,6 +2586,34 @@ def render_smart_scan(user: User) -> None:
                 ]
             )
             st.dataframe(history_df, width="stretch", hide_index=True)
+
+            scan_options = {item.id: item for item in scans}
+            selected_scan_id = st.selectbox(
+                "Delete a scan-history item",
+                options=[None, *scan_options.keys()],
+                format_func=lambda value: (
+                    "Select a saved scan"
+                    if value is None
+                    else f"{scan_options[value].scan_date.strftime('%m/%d/%Y')} · "
+                    f"{scan_options[value].source} · {scan_options[value].food_name}"
+                ),
+                key="scan_history_delete_choice",
+            )
+            if st.button(
+                "Delete selected scan",
+                disabled=selected_scan_id is None,
+                key="delete_selected_scan_history",
+            ):
+                with SessionLocal() as session:
+                    session.execute(
+                        delete(SmartScan).where(
+                            SmartScan.id == selected_scan_id,
+                            SmartScan.user_id == user.id,
+                        )
+                    )
+                    session.commit()
+                st.success("Scan-history item deleted.")
+                st.rerun()
         else:
             st.markdown('<div class="nv-empty">Food-photo and barcode scans will appear here after you save them.</div>', unsafe_allow_html=True)
 
@@ -2866,6 +2894,88 @@ def render_workouts(user: User) -> None:
                     if sets:
                         df = pd.DataFrame([{"Exercise": x.exercise_name, "Set": x.set_number, "Reps": x.reps, "Weight (lb)": x.weight_lb, "Distance (mi)": x.distance_miles, "Minutes": x.duration_min} for x in sets])
                         st.dataframe(df, width="stretch", hide_index=True)
+
+                        set_options = {item.id: item for item in sets}
+                        selected_set_id = st.selectbox(
+                            "Exercise set to edit",
+                            options=list(set_options),
+                            format_func=lambda value: (
+                                f"{set_options[value].exercise_name} · Set {set_options[value].set_number} · "
+                                f"{set_options[value].reps} reps · {set_options[value].weight_lb:g} lb"
+                            ),
+                            key=f"history_set_choice_{workout.id}",
+                        )
+                        selected_set = set_options[selected_set_id]
+                        with st.form(f"edit_history_set_form_{workout.id}_{selected_set_id}"):
+                            e1, e2, e3 = st.columns(3)
+                            edited_set_number = e1.number_input(
+                                "Set",
+                                min_value=1,
+                                max_value=100,
+                                value=int(selected_set.set_number),
+                                step=1,
+                                key=f"edit_set_number_{workout.id}_{selected_set_id}",
+                            )
+                            edited_reps = e2.number_input(
+                                "Reps",
+                                min_value=0,
+                                max_value=1000,
+                                value=int(selected_set.reps),
+                                step=1,
+                                key=f"edit_reps_{workout.id}_{selected_set_id}",
+                            )
+                            edited_weight = e3.number_input(
+                                "Weight (lb)",
+                                min_value=0.0,
+                                max_value=3000.0,
+                                value=float(selected_set.weight_lb),
+                                step=2.5,
+                                key=f"edit_weight_{workout.id}_{selected_set_id}",
+                            )
+                            e4, e5 = st.columns(2)
+                            edited_distance = e4.number_input(
+                                "Distance (miles)",
+                                min_value=0.0,
+                                max_value=500.0,
+                                value=float(selected_set.distance_miles),
+                                step=0.1,
+                                key=f"edit_distance_{workout.id}_{selected_set_id}",
+                            )
+                            edited_minutes = e5.number_input(
+                                "Minutes",
+                                min_value=0.0,
+                                max_value=600.0,
+                                value=float(selected_set.duration_min),
+                                step=0.5,
+                                key=f"edit_minutes_{workout.id}_{selected_set_id}",
+                            )
+                            save_set_changes = st.form_submit_button(
+                                "Save set changes",
+                                type="primary",
+                                width="stretch",
+                            )
+                        if save_set_changes:
+                            with SessionLocal() as session:
+                                owned_set = session.scalar(
+                                    select(ExerciseSet)
+                                    .join(WorkoutSession, ExerciseSet.session_id == WorkoutSession.id)
+                                    .where(
+                                        ExerciseSet.id == selected_set_id,
+                                        WorkoutSession.id == workout.id,
+                                        WorkoutSession.user_id == user.id,
+                                    )
+                                )
+                                if owned_set is None:
+                                    st.error("This exercise set could not be found.")
+                                else:
+                                    owned_set.set_number = int(edited_set_number)
+                                    owned_set.reps = int(edited_reps)
+                                    owned_set.weight_lb = float(edited_weight)
+                                    owned_set.distance_miles = float(edited_distance)
+                                    owned_set.duration_min = float(edited_minutes)
+                                    session.commit()
+                                    st.success("Exercise set updated.")
+                            st.rerun()
                     else:
                         st.caption("No detailed exercise sets saved.")
                     if st.button("Delete workout", key=f"delete_workout_{workout.id}"):
